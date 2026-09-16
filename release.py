@@ -117,8 +117,14 @@ def main():
     # 3. Git commit and push
     try:
         subprocess.run(["git", "add", "."], check=True)
-        subprocess.run(["git", "commit", "-m", f"chore: release v{version}"], check=True)
-        subprocess.run(["git", "push", "origin", "main"], check=True)
+        status = subprocess.run(
+            ["git", "status", "--porcelain"], capture_output=True, text=True, check=True
+        )
+        if status.stdout.strip():
+            subprocess.run(["git", "commit", "-m", f"chore: release v{version}"], check=True)
+            subprocess.run(["git", "push", "origin", "main"], check=True)
+        else:
+            print("Working tree clean, skipping commit.")
     except subprocess.CalledProcessError as e:
         print(f"Failed to commit/push to main: {e}")
         sys.exit(1)

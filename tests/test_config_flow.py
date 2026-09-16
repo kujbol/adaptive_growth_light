@@ -1,12 +1,11 @@
-"""Unit tests for config flow and options flow."""
+"""Unit tests for config flow and options flow using pytest-homeassistant-custom-component."""
 
-from unittest.mock import MagicMock
+from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.adaptive_growth_light.config_flow import (
-    AdaptiveGrowthLightConfigFlow,
-    get_config_schema,
-)
+from custom_components.adaptive_growth_light.config_flow import get_config_schema
 from custom_components.adaptive_growth_light.const import (
     CONF_DAYLIGHT_OVERLAP,
     CONF_LIGHTING_MODE,
@@ -14,6 +13,7 @@ from custom_components.adaptive_growth_light.const import (
     CONF_NAME,
     CONF_TARGET_ENTITY,
     CONF_TARGET_PHOTOPERIOD,
+    DOMAIN,
 )
 
 
@@ -22,10 +22,13 @@ def test_config_schema_defaults():
     assert schema is not None
 
 
-@pytest.mark.asyncio
-async def test_config_flow_user_step_creates_entry():
-    flow = AdaptiveGrowthLightConfigFlow()
-    flow.hass = None
+async def test_config_flow_user_step_creates_entry(hass: HomeAssistant) -> None:
+    """Test user step of config flow end-to-end."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "user"
 
     user_input = {
         CONF_NAME: "Kitchen Basil",
@@ -36,11 +39,47 @@ async def test_config_flow_user_step_creates_entry():
         CONF_DAYLIGHT_OVERLAP: 1.0,
     }
 
-    flow.async_create_entry = MagicMock(
-        return_value={"type": "create_entry", "title": user_input[CONF_NAME], "data": user_input}
+    result2 = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input,
     )
+    assert result2["type"] is FlowResultType.CREATE_ENTRY
+    assert result2["title"] == "Kitchen Basil"
+    assert result2["data"] == user_input
 
-    result = await flow.async_step_user(user_input)
-    assert result["type"] == "create_entry"
-    assert result["title"] == "Kitchen Basil"
-    assert result["data"] == user_input
+
+async def test_options_flow(hass: HomeAssistant) -> None:
+    """Test options flow to update settings."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Balcony Mint",
+        data={
+            CONF_NAME: "Balcony Mint",
+            CONF_TARGET_ENTITY: "switch.mint_light",
+            CONF_TARGET_PHOTOPERIOD: 12.0,
+            CONF_LIGHTING_MODE: "both",
+            CONF_MORNING_SPLIT: 50.0,
+            CONF_DAYLIGHT_OVERLAP: 1.0,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "init"
+
+    result2 = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_NAME: "Balcony Mint Updated",
+            CONF_TARGET_ENTITY: "switch.mint_light_new",
+            CONF_TARGET_PHOTOPERIOD: 14.5,
+            CONF_LIGHTING_MODE: "evening",
+            CONF_MORNING_SPLIT: 50.0,
+            CONF_DAYLIGHT_OVERLAP: 1.5,
+        },
+    )
+    assert result2["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.data[CONF_TARGET_PHOTOPERIOD] == 14.5
+    assert entry.data[CONF_LIGHTING_MODE] == "evening"
+    assert entry.data[CONF_DAYLIGHT_OVERLAP] == 1.5

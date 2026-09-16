@@ -5,6 +5,7 @@ from __future__ import annotations
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, LIGHTING_MODES
@@ -37,6 +38,17 @@ class AdaptiveGrowthLightModeSelect(SelectEntity):
         self.entry = entry
         self._attr_name = "Lighting Mode"
         self._attr_unique_id = f"{entry.entry_id}_lighting_mode"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device information."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.entry.entry_id)},
+            name=self.coordinator.name,
+            manufacturer="Adaptive Growth Light",
+            model="Photoperiod Controller",
+            sw_version="1.0.0",
+        )
 
     async def async_added_to_hass(self) -> None:
         """Register coordinator update listener."""

@@ -1,11 +1,8 @@
-"""Unit tests for coordinator runtime logic."""
+"""Unit tests for coordinator runtime logic with real Home Assistant fixture."""
 
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock
-import zoneinfo
 import pytest
+from homeassistant.core import HomeAssistant
 
-from custom_components.adaptive_growth_light.coordinator import AdaptiveGrowthLightCoordinator
 from custom_components.adaptive_growth_light.const import (
     CONF_DAYLIGHT_OVERLAP,
     CONF_LIGHTING_MODE,
@@ -14,23 +11,16 @@ from custom_components.adaptive_growth_light.const import (
     CONF_TARGET_ENTITY,
     CONF_TARGET_PHOTOPERIOD,
 )
-
-TZ_WARSAW = zoneinfo.ZoneInfo("Europe/Warsaw")
-
-
-@pytest.fixture
-def mock_hass():
-    hass = MagicMock()
-    hass.config.latitude = 52.2297
-    hass.config.longitude = 21.0122
-    hass.config.elevation = 100.0
-    hass.services.async_call = AsyncMock()
-    hass.states.get = MagicMock(return_value=MagicMock(state="off"))
-    return hass
+from custom_components.adaptive_growth_light.coordinator import (
+    AdaptiveGrowthLightCoordinator,
+)
 
 
-@pytest.mark.asyncio
-async def test_coordinator_initialization_and_recalculate(mock_hass):
+async def test_coordinator_initialization_and_recalculate(hass: HomeAssistant) -> None:
+    # Set Home Assistant coordinates (Warsaw)
+    await hass.config.async_set_time_zone("Europe/Warsaw")
+    await hass.config.async_update(latitude=52.2297, longitude=21.0122, elevation=100)
+
     data = {
         CONF_NAME: "Bathroom Plants",
         CONF_TARGET_ENTITY: "switch.bathroom_grow_light",
@@ -39,7 +29,7 @@ async def test_coordinator_initialization_and_recalculate(mock_hass):
         CONF_MORNING_SPLIT: 50.0,
         CONF_DAYLIGHT_OVERLAP: 1.0,
     }
-    coordinator = AdaptiveGrowthLightCoordinator(mock_hass, "test_entry_1", data)
+    coordinator = AdaptiveGrowthLightCoordinator(hass, "test_entry_1", data)
 
     # Initial recalculate
     coordinator.recalculate()
@@ -61,8 +51,10 @@ async def test_coordinator_initialization_and_recalculate(mock_hass):
     ]
 
 
-@pytest.mark.asyncio
-async def test_coordinator_dynamic_setters(mock_hass):
+async def test_coordinator_dynamic_setters(hass: HomeAssistant) -> None:
+    await hass.config.async_set_time_zone("Europe/Warsaw")
+    await hass.config.async_update(latitude=52.2297, longitude=21.0122, elevation=100)
+
     data = {
         CONF_NAME: "Bathroom Plants",
         CONF_TARGET_ENTITY: "switch.bathroom_grow_light",
@@ -71,7 +63,7 @@ async def test_coordinator_dynamic_setters(mock_hass):
         CONF_MORNING_SPLIT: 50.0,
         CONF_DAYLIGHT_OVERLAP: 1.0,
     }
-    coordinator = AdaptiveGrowthLightCoordinator(mock_hass, "test_entry_1", data)
+    coordinator = AdaptiveGrowthLightCoordinator(hass, "test_entry_1", data)
 
     listener_called = False
 
@@ -112,8 +104,10 @@ async def test_coordinator_dynamic_setters(mock_hass):
     assert listener_called is True
 
 
-@pytest.mark.asyncio
-async def test_seasonal_matrix_from_coordinator(mock_hass):
+async def test_seasonal_matrix_from_coordinator(hass: HomeAssistant) -> None:
+    await hass.config.async_set_time_zone("Europe/Warsaw")
+    await hass.config.async_update(latitude=52.2297, longitude=21.0122, elevation=100)
+
     data = {
         CONF_NAME: "Living Room Monstera",
         CONF_TARGET_ENTITY: "light.monstera_light",
@@ -122,7 +116,7 @@ async def test_seasonal_matrix_from_coordinator(mock_hass):
         CONF_MORNING_SPLIT: 50.0,
         CONF_DAYLIGHT_OVERLAP: 1.0,
     }
-    coordinator = AdaptiveGrowthLightCoordinator(mock_hass, "test_entry_2", data)
+    coordinator = AdaptiveGrowthLightCoordinator(hass, "test_entry_2", data)
     matrix = coordinator.get_seasonal_matrix()
     assert len(matrix) == 12
     for m in matrix:

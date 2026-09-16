@@ -10,7 +10,7 @@
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/kujbol/adaptive_growth_light/issues",
   "requirements": [
-    "astral>=3.2"
+    "astral>=2.2"
   ],
   "version": "1.0.0"
 }

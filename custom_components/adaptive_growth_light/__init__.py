@@ -25,7 +25,7 @@ PLATFORMS: list[Platform] = [
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the integration and register frontend Lovelace card static path."""
     card_path = Path(__file__).parent / FRONTEND_DIR / "adaptive-growth-light-card.js"
-    if card_path.exists():
+    if hasattr(hass, "http") and hass.http and card_path.exists():
         hass.http.register_static_path(
             FRONTEND_URL,
             str(card_path),
