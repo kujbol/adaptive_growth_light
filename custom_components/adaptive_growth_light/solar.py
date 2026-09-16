@@ -300,3 +300,55 @@ class SolarCalculator:
             })
 
         return months_data
+
+    def get_seasonal_preview_text(
+        self,
+        target_hours: float,
+        mode: str = "both",
+        morning_split_pct: float = 50.0,
+        overlap_hours: float = 1.0,
+        ref_year: int | None = None,
+    ) -> str:
+        """Format a clear seasonal breakdown text for config flow preview dialog."""
+        year = ref_year or datetime.now(self.tz).year
+        today = datetime.now(self.tz).date()
+
+        dates = [
+            ("☀️ Summer Solstice (Jun 21)", date(year, 6, 21)),
+            ("🍂 Autumn Midpoint (Oct 15)", date(year, 10, 15)),
+            ("❄️ Winter Solstice (Dec 21)", date(year, 12, 21)),
+            ("🌱 Spring Midpoint (Apr 15)", date(year, 4, 15)),
+        ]
+
+        lines = [
+            f"Target: **{target_hours}h** photoperiod ({mode.capitalize()} mode, {overlap_hours}h daylight overlap)\n"
+        ]
+
+        for label, d in dates:
+            plan = self.get_daily_photoperiod(
+                d, target_hours, mode, morning_split_pct, overlap_hours
+            )
+            nat = plan.natural_daylight_hours
+            supp = plan.supplementary_hours
+            if supp <= 0:
+                action = "🌱 Light stays OFF (natural sunlight sufficient)"
+            elif mode == "morning":
+                action = f"💡 Runs {supp}h before sunrise"
+            elif mode == "evening":
+                action = f"💡 Runs {supp}h after sunset"
+            else:
+                m_h = plan.morning_session.duration_hours if plan.morning_session else 0.0
+                e_h = plan.evening_session.duration_hours if plan.evening_session else 0.0
+                action = f"💡 {m_h}h morning + {e_h}h evening"
+
+            lines.append(f"- **{label}**: {nat}h daylight ➔ **{supp}h** supplement\n  _{action}_")
+
+        today_plan = self.get_daily_photoperiod(
+            today, target_hours, mode, morning_split_pct, overlap_hours
+        )
+        lines.append(
+            f"\n🗓️ **Today ({today.strftime('%b %d')})**: {today_plan.natural_daylight_hours}h natural daylight ➔ **{today_plan.supplementary_hours}h** supplement today."
+        )
+
+        return "\n".join(lines)
+

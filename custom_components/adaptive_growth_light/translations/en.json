@@ -12,6 +12,10 @@
           "morning_split": "Morning Split Percentage (for 'Both' mode)",
           "daylight_overlap": "Daylight Overlap Buffer (hours)"
         }
+      },
+      "preview": {
+        "title": "Seasonal Lighting Preview",
+        "description": "Review how your light will adapt across the seasons for your location ({target_hours}h target photoperiod):\n\n{preview_text}\n\nClick **Submit** to finalize setup."
       }
     }
   },
@@ -28,6 +32,10 @@
           "morning_split": "Morning Split Percentage (for 'Both' mode)",
           "daylight_overlap": "Daylight Overlap Buffer (hours)"
         }
+      },
+      "preview": {
+        "title": "Seasonal Lighting Preview",
+        "description": "Review your updated seasonal schedule ({target_hours}h target photoperiod):\n\n{preview_text}\n\nClick **Submit** to save changes."
       }
     }
   },

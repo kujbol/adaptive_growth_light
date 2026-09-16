@@ -35,6 +35,11 @@ from .const import (
 )
 
 
+from homeassistant.util import dt as dt_util
+
+from .solar import SolarCalculator
+
+
 def get_config_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     """Generate the config schema with current or default values."""
     defaults = defaults or {}
@@ -107,21 +112,51 @@ class AdaptiveGrowthLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        """Initialize flow."""
+        self._config_data: dict[str, Any] = {}
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         """Handle the initial step."""
-        errors: dict[str, str] = {}
-
         if user_input is not None:
-            # Set unique ID based on target entity if desired or random
-            name = user_input.get(CONF_NAME, DEFAULT_NAME)
-            return self.async_create_entry(title=name, data=user_input)
+            self._config_data = user_input
+            return await self.async_step_preview()
 
         return self.async_show_form(
             step_id="user",
             data_schema=get_config_schema(),
-            errors=errors,
+        )
+
+    async def async_step_preview(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Display seasonal daylight vs. supplementary light preview before creating entry."""
+        if user_input is not None:
+            name = self._config_data.get(CONF_NAME, DEFAULT_NAME)
+            return self.async_create_entry(title=name, data=self._config_data)
+
+        calc = SolarCalculator(
+            latitude=self.hass.config.latitude,
+            longitude=self.hass.config.longitude,
+            elevation=self.hass.config.elevation,
+            tz=dt_util.DEFAULT_TIME_ZONE,
+        )
+        preview_text = calc.get_seasonal_preview_text(
+            target_hours=self._config_data[CONF_TARGET_PHOTOPERIOD],
+            mode=self._config_data[CONF_LIGHTING_MODE],
+            morning_split_pct=self._config_data[CONF_MORNING_SPLIT],
+            overlap_hours=self._config_data[CONF_DAYLIGHT_OVERLAP],
+        )
+
+        return self.async_show_form(
+            step_id="preview",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "preview_text": preview_text,
+                "target_hours": str(self._config_data[CONF_TARGET_PHOTOPERIOD]),
+            },
         )
 
     @staticmethod
@@ -136,19 +171,53 @@ class AdaptiveGrowthLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class AdaptiveGrowthLightOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for an existing config entry."""
 
+    def __init__(self) -> None:
+        """Initialize options flow."""
+        self._options_data: dict[str, Any] = {}
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         """Manage configuration options."""
         if user_input is not None:
-            # Update entry data and reload coordinator
-            self.hass.config_entries.async_update_entry(
-                self.config_entry, data={**self.config_entry.data, **user_input}
-            )
-            return self.async_create_entry(title="", data=user_input)
+            self._options_data = user_input
+            return await self.async_step_preview()
 
         current_data = {**self.config_entry.data, **self.config_entry.options}
         return self.async_show_form(
             step_id="init",
             data_schema=get_config_schema(current_data),
         )
+
+    async def async_step_preview(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Display seasonal preview before saving updated settings."""
+        if user_input is not None:
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data={**self.config_entry.data, **self._options_data}
+            )
+            return self.async_create_entry(title="", data=self._options_data)
+
+        calc = SolarCalculator(
+            latitude=self.hass.config.latitude,
+            longitude=self.hass.config.longitude,
+            elevation=self.hass.config.elevation,
+            tz=dt_util.DEFAULT_TIME_ZONE,
+        )
+        preview_text = calc.get_seasonal_preview_text(
+            target_hours=self._options_data[CONF_TARGET_PHOTOPERIOD],
+            mode=self._options_data[CONF_LIGHTING_MODE],
+            morning_split_pct=self._options_data[CONF_MORNING_SPLIT],
+            overlap_hours=self._options_data[CONF_DAYLIGHT_OVERLAP],
+        )
+
+        return self.async_show_form(
+            step_id="preview",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "preview_text": preview_text,
+                "target_hours": str(self._options_data[CONF_TARGET_PHOTOPERIOD]),
+            },
+        )
+

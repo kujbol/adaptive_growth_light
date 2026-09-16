@@ -12,6 +12,10 @@
           "morning_split": "Udział poranny w trybie łączonym (%)",
           "daylight_overlap": "Bufor nakładania z dniem (godziny)"
         }
+      },
+      "preview": {
+        "title": "Podgląd Doświetlania w Sezonach",
+        "description": "Zobacz, jak doświetlanie będzie adaptować się w ciągu roku dla Twojej lokalizacji (fotoperiod: {target_hours}h):\n\n{preview_text}\n\nKliknij **Zatwierdź**, aby zakończyć konfigurację."
       }
     }
   },
@@ -28,6 +32,10 @@
           "morning_split": "Udział poranny w trybie łączonym (%)",
           "daylight_overlap": "Bufor nakładania z dniem (godziny)"
         }
+      },
+      "preview": {
+        "title": "Zaktualizowany Podgląd Sezonowy",
+        "description": "Sprawdź zaktualizowany harmonogram w sezonach (fotoperiod: {target_hours}h):\n\n{preview_text}\n\nKliknij **Zatwierdź**, aby zapisać zmiany."
       }
     }
   },

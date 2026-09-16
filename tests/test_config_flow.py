@@ -23,7 +23,7 @@ def test_config_schema_defaults():
 
 
 async def test_config_flow_user_step_creates_entry(hass: HomeAssistant) -> None:
-    """Test user step of config flow end-to-end."""
+    """Test user step of config flow leading to seasonal preview and entry creation."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": "user"}
     )
@@ -39,9 +39,19 @@ async def test_config_flow_user_step_creates_entry(hass: HomeAssistant) -> None:
         CONF_DAYLIGHT_OVERLAP: 1.0,
     }
 
-    result2 = await hass.config_entries.flow.async_configure(
+    # Step 1: Submit configuration -> shows seasonal preview step!
+    result_preview = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         user_input,
+    )
+    assert result_preview["type"] is FlowResultType.FORM
+    assert result_preview["step_id"] == "preview"
+    assert "preview_text" in result_preview["description_placeholders"]
+
+    # Step 2: Confirm preview -> creates entry!
+    result2 = await hass.config_entries.flow.async_configure(
+        result_preview["flow_id"],
+        {},
     )
     assert result2["type"] is FlowResultType.CREATE_ENTRY
     assert result2["title"] == "Kitchen Basil"
@@ -49,7 +59,7 @@ async def test_config_flow_user_step_creates_entry(hass: HomeAssistant) -> None:
 
 
 async def test_options_flow(hass: HomeAssistant) -> None:
-    """Test options flow to update settings."""
+    """Test options flow to update settings with seasonal preview."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Balcony Mint",
@@ -68,7 +78,8 @@ async def test_options_flow(hass: HomeAssistant) -> None:
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "init"
 
-    result2 = await hass.config_entries.options.async_configure(
+    # Step 1: Submit options -> shows seasonal preview step
+    result_preview = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
             CONF_NAME: "Balcony Mint Updated",
@@ -78,6 +89,14 @@ async def test_options_flow(hass: HomeAssistant) -> None:
             CONF_MORNING_SPLIT: 50.0,
             CONF_DAYLIGHT_OVERLAP: 1.5,
         },
+    )
+    assert result_preview["type"] is FlowResultType.FORM
+    assert result_preview["step_id"] == "preview"
+
+    # Step 2: Confirm preview -> updates entry
+    result2 = await hass.config_entries.options.async_configure(
+        result_preview["flow_id"],
+        {},
     )
     assert result2["type"] is FlowResultType.CREATE_ENTRY
     assert entry.data[CONF_TARGET_PHOTOPERIOD] == 14.5
