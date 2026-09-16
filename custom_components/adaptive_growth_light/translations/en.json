@@ -1,0 +1,90 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure Adaptive Growth Light",
+        "description": "Set up intelligent supplemental lighting for your plants based on natural sunlight and target photoperiod.",
+        "data": {
+          "name": "Name",
+          "target_entity": "Plant Light / Switch Entity",
+          "target_photoperiod": "Target Daily Photoperiod (hours)",
+          "lighting_mode": "Lighting Routine Mode",
+          "morning_split": "Morning Split Percentage (for 'Both' mode)",
+          "daylight_overlap": "Daylight Overlap Buffer (hours)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Adaptive Growth Light Settings",
+        "description": "Adjust photoperiod, lighting modes, and schedule parameters.",
+        "data": {
+          "name": "Name",
+          "target_entity": "Plant Light / Switch Entity",
+          "target_photoperiod": "Target Daily Photoperiod (hours)",
+          "lighting_mode": "Lighting Routine Mode",
+          "morning_split": "Morning Split Percentage (for 'Both' mode)",
+          "daylight_overlap": "Daylight Overlap Buffer (hours)"
+        }
+      }
+    }
+  },
+  "selector": {
+    "lighting_mode": {
+      "options": {
+        "morning": "Morning only (supplement before sunrise)",
+        "evening": "Evening only (supplement after sunset)",
+        "both": "Both (split between morning & evening)"
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "automation": {
+        "name": "Automation"
+      }
+    },
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "supplementing_morning": "Supplementing (Morning)",
+          "supplementing_evening": "Supplementing (Evening)",
+          "daylight_active": "Daylight Active",
+          "night_idle": "Idle (Night)",
+          "disabled": "Disabled"
+        }
+      },
+      "next_session": {
+        "name": "Next Session"
+      },
+      "supplementary_hours": {
+        "name": "Supplementary Hours Today"
+      },
+      "natural_daylight": {
+        "name": "Natural Daylight Today"
+      },
+      "seasonal_profile": {
+        "name": "Seasonal Profile"
+      }
+    },
+    "number": {
+      "target_photoperiod": {
+        "name": "Target Photoperiod"
+      },
+      "morning_split": {
+        "name": "Morning Split"
+      },
+      "daylight_overlap": {
+        "name": "Daylight Overlap"
+      }
+    },
+    "select": {
+      "lighting_mode": {
+        "name": "Lighting Mode"
+      }
+    }
+  }
+}

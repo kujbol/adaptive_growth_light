@@ -1,0 +1,90 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Konfiguracja Inteligentnego Doświetlania Roślin",
+        "description": "Skonfiguruj adaptacyjne doświetlanie roślin w oparciu o naturalne światło słoneczne i docelowy fotoperiod.",
+        "data": {
+          "name": "Nazwa",
+          "target_entity": "Światło lub przełącznik doświetlania",
+          "target_photoperiod": "Docelowy fotoperiod dzienny (godziny)",
+          "lighting_mode": "Tryb doświetlania",
+          "morning_split": "Udział poranny w trybie łączonym (%)",
+          "daylight_overlap": "Bufor nakładania z dniem (godziny)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Ustawienia Doświetlania Roślin",
+        "description": "Dostosuj fotoperiod, tryby świecenia i harmonogram.",
+        "data": {
+          "name": "Nazwa",
+          "target_entity": "Światło lub przełącznik doświetlania",
+          "target_photoperiod": "Docelowy fotoperiod dzienny (godziny)",
+          "lighting_mode": "Tryb doświetlania",
+          "morning_split": "Udział poranny w trybie łączonym (%)",
+          "daylight_overlap": "Bufor nakładania z dniem (godziny)"
+        }
+      }
+    }
+  },
+  "selector": {
+    "lighting_mode": {
+      "options": {
+        "morning": "Tylko rano (doświetlanie przed wschodem)",
+        "evening": "Tylko wieczorem (doświetlanie po zachodzie)",
+        "both": "Rano i wieczorem (podział proporcjonalny)"
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "automation": {
+        "name": "Automatyzacja"
+      }
+    },
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "supplementing_morning": "Doświetlanie poranne",
+          "supplementing_evening": "Doświetlanie wieczorne",
+          "daylight_active": "Światło naturalne (dzień)",
+          "night_idle": "Spoczynek nocny",
+          "disabled": "Wyłączona"
+        }
+      },
+      "next_session": {
+        "name": "Następna sesja"
+      },
+      "supplementary_hours": {
+        "name": "Doświetlanie dziś"
+      },
+      "natural_daylight": {
+        "name": "Naturalne światło dziś"
+      },
+      "seasonal_profile": {
+        "name": "Profil sezonowy"
+      }
+    },
+    "number": {
+      "target_photoperiod": {
+        "name": "Docelowy fotoperiod"
+      },
+      "morning_split": {
+        "name": "Udział rano"
+      },
+      "daylight_overlap": {
+        "name": "Nakładanie z dniem"
+      }
+    },
+    "select": {
+      "lighting_mode": {
+        "name": "Tryb świecenia"
+      }
+    }
+  }
+}
