@@ -72,35 +72,35 @@ async def test_config_flow_morning_mode_skips_split(hass: HomeAssistant) -> None
 
 
 async def test_config_flow_both_mode_shows_split_step(hass: HomeAssistant) -> None:
-    """Test that selecting both mode shows the split slider before preview."""
+    """Test that creating new device with both mode has the split slider directly on user form."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": "user"}
     )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "user"
+
+    # Verify morning_split slider is directly present on the initial setup form
+    schema_keys = [k.schema if hasattr(k, "schema") else k for k in result["data_schema"].schema.keys()]
+    assert CONF_MORNING_SPLIT in schema_keys
+
     user_input = {
         CONF_NAME: "Bedroom Ficus",
         CONF_TARGET_ENTITY: "light.bedroom_grow_light",
         CONF_TARGET_PHOTOPERIOD: 14.0,
         CONF_LIGHTING_MODE: MODE_BOTH,
+        CONF_MORNING_SPLIT: 40.0,
         CONF_DAYLIGHT_OVERLAP: 1.0,
     }
 
-    # Step 1: Submit configuration -> shows split step
-    result_split = await hass.config_entries.flow.async_configure(
+    # Step 1: Submit configuration -> shows preview menu with configured split
+    result_preview = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         user_input,
-    )
-    assert result_split["type"] is FlowResultType.FORM
-    assert result_split["step_id"] == "split"
-
-    # Step 2: Configure split percentage -> shows preview menu
-    result_preview = await hass.config_entries.flow.async_configure(
-        result_split["flow_id"],
-        {CONF_MORNING_SPLIT: 40.0},
     )
     assert result_preview["type"] is FlowResultType.MENU
     assert result_preview["step_id"] == "preview"
 
-    # Step 3: Confirm -> creates entry with configured split
+    # Step 2: Confirm -> creates entry with configured split
     result_create = await hass.config_entries.flow.async_configure(
         result_preview["flow_id"],
         {"next_step_id": "confirm"},
@@ -364,7 +364,7 @@ async def test_config_flow_auto_name_entity_ending_with_light(
 async def test_config_flow_mode_switch_from_morning_to_both_shows_split_slider(
     hass: HomeAssistant,
 ) -> None:
-    """Test that switching from morning mode back to both mode always shows the split slider."""
+    """Test that switching from morning mode back to both mode always shows the split slider on the form."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": "user"}
     )
@@ -389,8 +389,11 @@ async def test_config_flow_mode_switch_from_morning_to_both_shows_split_slider(
     )
     assert res_back["type"] is FlowResultType.FORM
     assert res_back["step_id"] == "user"
+    # Form schema must contain morning_split slider
+    schema_keys = [k.schema if hasattr(k, "schema") else k for k in res_back["data_schema"].schema.keys()]
+    assert CONF_MORNING_SPLIT in schema_keys
 
-    # 3. User switches to Both
+    # 3. User switches to Both with custom split
     res_both = await hass.config_entries.flow.async_configure(
         res_back["flow_id"],
         {
@@ -398,9 +401,17 @@ async def test_config_flow_mode_switch_from_morning_to_both_shows_split_slider(
             CONF_TARGET_ENTITY: "switch.ficus",
             CONF_TARGET_PHOTOPERIOD: 14.0,
             CONF_LIGHTING_MODE: MODE_BOTH,
+            CONF_MORNING_SPLIT: 35.0,
             CONF_DAYLIGHT_OVERLAP: 1.0,
         },
     )
-    # Must show the split slider!
-    assert res_both["type"] is FlowResultType.FORM
-    assert res_both["step_id"] == "split"
+    assert res_both["type"] is FlowResultType.MENU
+    assert res_both["step_id"] == "preview"
+
+    # 4. Confirm creation
+    res_create = await hass.config_entries.flow.async_configure(
+        res_both["flow_id"],
+        {"next_step_id": "confirm"},
+    )
+    assert res_create["type"] is FlowResultType.CREATE_ENTRY
+    assert res_create["data"][CONF_MORNING_SPLIT] == 35.0

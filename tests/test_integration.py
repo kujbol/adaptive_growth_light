@@ -160,3 +160,34 @@ def test_brand_assets_validity() -> None:
             assert img.mode == "RGBA", f"{path.name} must have RGBA alpha transparency channel"
 
 
+def test_card_visual_editor_definition() -> None:
+    """Verify that adaptive-growth-light-card.js registers a visual card editor with entity filtering."""
+    from pathlib import Path
+
+    card_js_path = (
+        Path(__file__).parent.parent
+        / "custom_components"
+        / "adaptive_growth_light"
+        / "frontend"
+        / "adaptive-growth-light-card.js"
+    )
+    assert card_js_path.exists(), "adaptive-growth-light-card.js must exist"
+
+    content = card_js_path.read_text(encoding="utf-8")
+
+    # Verify static methods on AdaptiveGrowthLightCard
+    assert "static getConfigElement()" in content, "Card must implement static getConfigElement for visual editor"
+    assert "adaptive-growth-light-card-editor" in content, "Card must instantiate adaptive-growth-light-card-editor"
+    assert "static getStubConfig(hass)" in content, "Card must implement static getStubConfig for smart entity preselection"
+
+    # Verify Editor class and registration
+    assert "class AdaptiveGrowthLightCardEditor extends HTMLElement" in content
+    assert 'customElements.define("adaptive-growth-light-card-editor", AdaptiveGrowthLightCardEditor)' in content
+
+    # Verify entity filtering for adaptive growth light
+    assert 'integration: "adaptive_growth_light"' in content, "Editor must filter entities by adaptive_growth_light integration"
+    assert "_getDiscoveredEntities()" in content, "Editor must provide quick-select for discovered adaptive lights"
+    assert "Discovered Adaptive Lights" in content
+
+
+

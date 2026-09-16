@@ -9,12 +9,14 @@
           "target_entity": "Światło lub przełącznik doświetlania",
           "target_photoperiod": "Docelowy fotoperiod dzienny (godziny)",
           "lighting_mode": "Tryb doświetlania",
+          "morning_split": "Udział poranny w trybie łączonym (%)",
           "daylight_overlap": "Bufor nakładania z dniem (godziny)",
           "earliest_start": "Najwcześniejszy start rano (blokada, opcjonalnie)",
           "latest_end": "Najpóźniejszy koniec wieczorem (blokada, opcjonalnie)"
         },
         "data_description": {
           "name": "Pozostaw puste, aby nazwa została wygenerowana automatycznie na podstawie wybranego światła (np. 'Fikus Adaptive Light').",
+          "morning_split": "Procent sztucznego doświetlania przypadający rano przed wschodem słońca (reszta po zachodzie) w trybie obu sesji.",
           "earliest_start": "Pozostaw puste dla braku limitu. Po ustawieniu światło nie włączy się przed tą godziną, a obcięty czas zostanie przeniesiony na wieczór.",
           "latest_end": "Pozostaw puste dla braku limitu. Po ustawieniu światło wyłączy się najpóźniej o tej godzinie."
         }

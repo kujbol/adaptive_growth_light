@@ -4,7 +4,7 @@
  * Version: 1.0.0
  */
 
-const CARD_VERSION = "1.1.3";
+const CARD_VERSION = "1.1.4";
 
 console.info(
   `%c ADAPTIVE-GROWTH-LIGHT-CARD %c v${CARD_VERSION} `,
@@ -1129,9 +1129,230 @@ class AdaptiveGrowthLightCard extends HTMLElement {
   getCardSize() {
     return this._isExpanded ? 6 : 3;
   }
+
+  static getConfigElement() {
+    return document.createElement("adaptive-growth-light-card-editor");
+  }
+
+  static getStubConfig(hass) {
+    if (!hass || !hass.states) return { entity: "" };
+    const candidates = Object.keys(hass.states).filter((eid) => {
+      if (!eid.startsWith("switch.")) return false;
+      const s = hass.states[eid];
+      return (
+        eid.endsWith("_automation") ||
+        s?.attributes?.target_entity !== undefined ||
+        eid.includes("adaptive_light") ||
+        eid.includes("adaptive_growth_light")
+      );
+    });
+    return {
+      entity: candidates.length > 0 ? candidates[0] : "",
+    };
+  }
+}
+
+class AdaptiveGrowthLightCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = {};
+    this._initialized = false;
+  }
+
+  setConfig(config) {
+    this._config = { ...config };
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  _getDiscoveredEntities() {
+    if (!this._hass || !this._hass.states) return [];
+    return Object.keys(this._hass.states)
+      .filter((eid) => {
+        if (!eid.startsWith("switch.")) return false;
+        const s = this._hass.states[eid];
+        return (
+          eid.endsWith("_automation") ||
+          s?.attributes?.target_entity !== undefined ||
+          eid.includes("adaptive_light") ||
+          eid.includes("adaptive_growth_light")
+        );
+      })
+      .map((eid) => ({
+        entity_id: eid,
+        name:
+          this._hass.states[eid].attributes.friendly_name?.replace(/ Automation$/, "") ||
+          eid.split(".")[1],
+      }));
+  }
+
+  _render() {
+    if (!this._hass || !this._config) return;
+
+    if (!this._initialized) {
+      this._initialized = true;
+      const style = document.createElement("style");
+      style.textContent = `
+        :host {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          padding: 8px 0;
+          box-sizing: border-box;
+        }
+        .chips-container {
+          background: var(--secondary-background-color, rgba(255, 255, 255, 0.04));
+          border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.1));
+          border-radius: 8px;
+          padding: 12px;
+          margin-bottom: 4px;
+        }
+        .chips-title {
+          font-size: 11px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: var(--secondary-text-color, #94a3b8);
+          margin-bottom: 8px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .chips-list {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .chip {
+          background: var(--card-background-color, rgba(255, 255, 255, 0.06));
+          border: 1px solid var(--primary-color, #10b981);
+          color: var(--primary-text-color, #f8fafc);
+          padding: 6px 12px;
+          border-radius: 16px;
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          transition: all 0.2s ease;
+        }
+        .chip:hover {
+          background: var(--primary-color, #10b981);
+          color: white;
+        }
+        .chip.active {
+          background: var(--primary-color, #10b981);
+          color: white;
+          box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+        }
+      `;
+      this.shadowRoot.appendChild(style);
+
+      this._chipsRoot = document.createElement("div");
+      this.shadowRoot.appendChild(this._chipsRoot);
+
+      this._form = document.createElement("ha-form");
+      this._form.addEventListener("value-changed", (ev) => this._valueChanged(ev));
+      this._form.computeLabel = (schema) => {
+        if (schema.name === "entity") return "Adaptive Light Entity (Automation Switch)";
+        if (schema.name === "name") return "Card Title (Optional)";
+        return schema.name;
+      };
+      this._form.computeHelper = (schema) => {
+        if (schema.name === "entity") {
+          return "Select the Adaptive Growth Light entity to monitor and control.";
+        }
+        return "";
+      };
+      this.shadowRoot.appendChild(this._form);
+    }
+
+    // Render discovered adaptive light quick chips
+    const discovered = this._getDiscoveredEntities();
+    if (discovered.length > 0) {
+      this._chipsRoot.innerHTML = `
+        <div class="chips-container">
+          <div class="chips-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93V18c0-.55-.45-1-1-1s-1 .45-1 1v1.93A8.001 8.001 0 014.07 13H6c.55 0 1-.45 1-1s-.45-1-1-1H4.07A8.001 8.001 0 0111 4.07V6c0 .55.45 1 1 1s1-.45 1-1V4.07A8.001 8.001 0 0119.93 11H18c-.55 0-1 .45-1 1s.45 1 1 1h1.93A8.001 8.001 0 0113 19.93z"/>
+            </svg>
+            Discovered Adaptive Lights
+          </div>
+          <div class="chips-list">
+            ${discovered
+              .map(
+                (d) => `
+              <button type="button" class="chip ${this._config.entity === d.entity_id ? "active" : ""}" data-entity="${d.entity_id}">
+                ${d.name}
+              </button>
+            `
+              )
+              .join("")}
+          </div>
+        </div>
+      `;
+
+      this._chipsRoot.querySelectorAll(".chip").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          const eid = btn.getAttribute("data-entity");
+          if (eid) {
+            this._valueChanged({ detail: { value: { ...this._config, entity: eid } } });
+          }
+        });
+      });
+    } else {
+      this._chipsRoot.innerHTML = "";
+    }
+
+    // Schema: filter strictly by adaptive_growth_light integration
+    const schema = [
+      {
+        name: "entity",
+        required: true,
+        selector: {
+          entity: {
+            filter: [
+              { integration: "adaptive_growth_light", domain: "switch" },
+              { integration: "adaptive_growth_light" },
+            ],
+          },
+        },
+      },
+      {
+        name: "name",
+        selector: { text: {} },
+      },
+    ];
+
+    this._form.hass = this._hass;
+    this._form.data = this._config;
+    this._form.schema = schema;
+  }
+
+  _valueChanged(ev) {
+    if (!this._config || !this._hass) return;
+    const newConfig = { ...this._config, ...ev.detail.value };
+    this._config = newConfig;
+    this._render();
+    this.dispatchEvent(
+      new CustomEvent("config-changed", {
+        detail: { config: newConfig },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
 }
 
 customElements.define("adaptive-growth-light-card", AdaptiveGrowthLightCard);
+customElements.define("adaptive-growth-light-card-editor", AdaptiveGrowthLightCardEditor);
 
 // Register card with Home Assistant card picker
 window.customCards = window.customCards || [];

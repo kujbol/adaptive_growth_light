@@ -9,12 +9,14 @@
           "target_entity": "Plant Light / Switch Entity",
           "target_photoperiod": "Target Daily Photoperiod (hours)",
           "lighting_mode": "Lighting Routine Mode",
+          "morning_split": "Morning Split Percentage (for 'Both' mode)",
           "daylight_overlap": "Daylight Overlap Buffer (hours)",
           "earliest_start": "Earliest Morning Start (Cut-Off, optional)",
           "latest_end": "Latest Evening End (Cut-Off, optional)"
         },
         "data_description": {
           "name": "Leave blank to automatically name after the selected entity (e.g. 'Ficus Adaptive Light').",
+          "morning_split": "Percentage of supplementary lighting hours allocated to morning before sunrise (remainder scheduled after sunset) when 'Both' mode is selected.",
           "earliest_start": "Leave empty for no morning limit. When set, lighting before this time is prevented and moved to the evening.",
           "latest_end": "Leave empty for no evening limit. When set, lighting after this time is prevented."
         }

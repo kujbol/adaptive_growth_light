@@ -83,7 +83,7 @@ def generate_default_name_from_entity(hass: HomeAssistant, entity_id: str) -> st
 
 def get_config_schema(
     defaults: dict[str, Any] | None = None,
-    include_split: bool = False,
+    include_split: bool = True,
 ) -> vol.Schema:
     """Generate the config schema with current or default values."""
     defaults = defaults or {}
@@ -146,7 +146,7 @@ def get_config_schema(
         )
     )
 
-    # Morning split percentage is only included when mode is "both"
+    # Morning split percentage is included for Both mode
     if include_split:
         schema_dict[
             vol.Required(
@@ -229,22 +229,24 @@ class AdaptiveGrowthLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not user_input.get(CONF_LATEST_END):
                 user_input[CONF_LATEST_END] = None
 
-            self._config_data.update(user_input)
-
             # Route based on lighting mode
             mode = user_input.get(CONF_LIGHTING_MODE, DEFAULT_LIGHTING_MODE)
             if mode == MODE_MORNING:
-                self._config_data[CONF_MORNING_SPLIT] = 100.0
-                return await self.async_step_preview()
+                user_input[CONF_MORNING_SPLIT] = 100.0
             elif mode == MODE_EVENING:
-                self._config_data[CONF_MORNING_SPLIT] = 0.0
-                return await self.async_step_preview()
+                user_input[CONF_MORNING_SPLIT] = 0.0
             else:  # MODE_BOTH
-                return await self.async_step_split()
+                if CONF_MORNING_SPLIT not in user_input:
+                    self._config_data.update(user_input)
+                    return await self.async_step_split()
+                user_input[CONF_MORNING_SPLIT] = float(user_input[CONF_MORNING_SPLIT])
+
+            self._config_data.update(user_input)
+            return await self.async_step_preview()
 
         return self.async_show_form(
             step_id="user",
-            data_schema=get_config_schema(self._config_data, include_split=False),
+            data_schema=get_config_schema(self._config_data, include_split=True),
         )
 
     async def async_step_split(
@@ -324,7 +326,7 @@ class AdaptiveGrowthLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Navigate back to user configuration step with existing values preserved."""
         return self.async_show_form(
             step_id="user",
-            data_schema=get_config_schema(self._config_data, include_split=False),
+            data_schema=get_config_schema(self._config_data, include_split=True),
         )
 
     @staticmethod
@@ -360,22 +362,24 @@ class AdaptiveGrowthLightOptionsFlowHandler(config_entries.OptionsFlow):
             if not user_input.get(CONF_LATEST_END):
                 user_input[CONF_LATEST_END] = None
 
-            self._options_data.update(user_input)
-
             mode = user_input.get(CONF_LIGHTING_MODE, DEFAULT_LIGHTING_MODE)
             if mode == MODE_MORNING:
-                self._options_data[CONF_MORNING_SPLIT] = 100.0
-                return await self.async_step_preview()
+                user_input[CONF_MORNING_SPLIT] = 100.0
             elif mode == MODE_EVENING:
-                self._options_data[CONF_MORNING_SPLIT] = 0.0
-                return await self.async_step_preview()
+                user_input[CONF_MORNING_SPLIT] = 0.0
             else:  # MODE_BOTH
-                return await self.async_step_split()
+                if CONF_MORNING_SPLIT not in user_input:
+                    self._options_data.update(user_input)
+                    return await self.async_step_split()
+                user_input[CONF_MORNING_SPLIT] = float(user_input[CONF_MORNING_SPLIT])
+
+            self._options_data.update(user_input)
+            return await self.async_step_preview()
 
         current_data = {**self.config_entry.data, **self.config_entry.options, **self._options_data}
         return self.async_show_form(
             step_id="init",
-            data_schema=get_config_schema(current_data, include_split=False),
+            data_schema=get_config_schema(current_data, include_split=True),
         )
 
     async def async_step_split(
@@ -464,7 +468,7 @@ class AdaptiveGrowthLightOptionsFlowHandler(config_entries.OptionsFlow):
         current_data = {**self.config_entry.data, **self.config_entry.options, **self._options_data}
         return self.async_show_form(
             step_id="init",
-            data_schema=get_config_schema(current_data, include_split=False),
+            data_schema=get_config_schema(current_data, include_split=True),
         )
 
 
