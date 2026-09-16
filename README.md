@@ -1,8 +1,18 @@
-# 🌱 Adaptive Growth Light for Home Assistant
+<p align="center">
+  <img src="https://raw.githubusercontent.com/kujbol/adaptive_growth_light/main/images/logo.png" alt="Adaptive Growth Light Logo" width="200" style="border-radius: 24px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);">
+</p>
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/default)
-[![GitHub Release](https://img.shields.io/github/v/release/kujbol/adaptive_growth_light?color=10b981)](https://github.com/kujbol/adaptive_growth_light/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<h1 align="center">🌱 Adaptive Growth Light</h1>
+
+<p align="center">
+  <strong>Intelligent supplementary plant lighting & photoperiod management for Home Assistant</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/hacs/default"><img src="https://img.shields.io/badge/HACS-Custom-41BDF5.svg" alt="HACS"></a>
+  <a href="https://github.com/kujbol/adaptive_growth_light/releases"><img src="https://img.shields.io/github/v/release/kujbol/adaptive_growth_light?color=10b981" alt="GitHub Release"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+</p>
 
 **Adaptive Growth Light** is an intelligent Home Assistant integration and custom Lovelace card designed to provide optimal supplementary lighting for indoor plants.
 

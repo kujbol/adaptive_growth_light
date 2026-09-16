@@ -12,10 +12,22 @@ This script automatically:
 
 ### How to use:
 
-Run the script from the root of the project with the desired new version:
+Preview and validate the release without making any changes:
 
 ```bash
-python3 release.py 1.0.0
+python3 release.py --dry-run
+```
+
+Or dry run a specific version:
+
+```bash
+python3 release.py 1.0.1 --dry-run
+```
+
+Execute the release:
+
+```bash
+python3 release.py 1.0.1
 ```
 
 Or auto-bump the patch version:

@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#18222d"/>
+      <stop offset="100%" stop-color="#0f1720"/>
+    </linearGradient>
+    <linearGradient id="sunGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+    <linearGradient id="leafGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Dark circular badge background -->
+  <rect width="200" height="200" rx="44" fill="url(#bgGrad)" />
+  <rect width="196" height="196" x="2" y="2" rx="42" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2" />
+
+  <!-- Solar arc / sun rays -->
+  <path d="M 130 55 A 55 55 0 0 1 155 100" fill="none" stroke="url(#sunGrad)" stroke-width="9" stroke-linecap="round" />
+  <path d="M 148 44 A 72 72 0 0 1 172 95" fill="none" stroke="url(#sunGrad)" stroke-width="4.5" stroke-linecap="round" opacity="0.6" stroke-dasharray="8 6" />
+
+  <!-- Main stem -->
+  <path d="M 96 156 L 96 90" fill="none" stroke="url(#leafGrad)" stroke-width="7" stroke-linecap="round" />
+
+  <!-- Center top leaf -->
+  <path d="M 96 92 C 96 66 112 50 112 50 C 112 50 128 66 128 92 C 128 106 116 114 96 114 Z" fill="url(#leafGrad)" />
+  <path d="M 96 92 L 118 72" stroke="#064e3b" stroke-width="2.5" stroke-linecap="round" />
+
+  <!-- Left leaf -->
+  <path d="M 96 118 C 76 116 54 100 52 82 C 68 80 90 94 96 110 Z" fill="url(#leafGrad)" />
+  <path d="M 96 114 C 84 106 72 98 62 92" stroke="#064e3b" stroke-width="2.5" stroke-linecap="round" />
+
+  <!-- Right leaf -->
+  <path d="M 96 136 C 114 134 138 122 142 106 C 126 102 104 116 96 128 Z" fill="url(#leafGrad)" />
+  <path d="M 96 132 C 108 124 122 118 132 114" stroke="#064e3b" stroke-width="2.5" stroke-linecap="round" />
+
+  <!-- Base soil / grounding dot -->
+  <circle cx="96" cy="160" r="4.5" fill="#34d399" />
+</svg>
