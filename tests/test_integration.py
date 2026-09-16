@@ -141,6 +141,10 @@ def test_brand_assets_validity() -> None:
         brand_dir / "dark_logo@2x.png": (1024, 1024),
         root / "custom_components" / "adaptive_growth_light" / "icon.png": (256, 256),
         root / "custom_components" / "adaptive_growth_light" / "logo.png": (512, 512),
+        root / "icon.png": (256, 256),
+        root / "icon@2x.png": (512, 512),
+        root / "logo.png": (512, 512),
+        root / "images" / "icon.png": (256, 256),
         root / "images" / "logo.png": (1024, 1024),
     }
 
