@@ -193,5 +193,72 @@ def test_card_visual_editor_definition() -> None:
     assert "_getDiscoveredEntities()" in content, "Editor must provide quick-select for discovered adaptive lights"
     assert "Discovered Adaptive Lights" in content
 
+    # Verify compact tile mode and interactive modal dialog
+    assert "compact-tile" in content, "Card must support compact tile view"
+    assert "modal-backdrop" in content, "Card must include modal backdrop"
+    assert "modal-dialog" in content, "Card must include modal popup dialog"
+    assert "_openModal" in content, "Card must include modal open handler"
+    assert "_closeModal" in content, "Card must include modal close handler"
+
+
+async def test_switch_attributes_and_non_blocking_coordinator(hass: HomeAssistant) -> None:
+    """Verify master switch attributes populate photoperiod metrics and coordinator avoids blocking open()."""
+    from unittest.mock import patch
+    from custom_components.adaptive_growth_light.coordinator import AdaptiveGrowthLightCoordinator
+
+    # Ensure coordinator __init__ does not call open()
+    with patch("builtins.open") as mock_open:
+        coord = AdaptiveGrowthLightCoordinator(
+            hass,
+            "test_entry",
+            {
+                CONF_NAME: "Plant Light",
+                CONF_TARGET_ENTITY: "switch.dummy_light",
+                CONF_TARGET_PHOTOPERIOD: 14.0,
+            },
+            sw_version="1.1.6",
+        )
+        assert mock_open.call_count == 0, "Coordinator __init__ must never perform blocking file open"
+        assert coord.sw_version == "1.1.6"
+
+    # Setup integration with real switch
+    await hass.config.async_set_time_zone("Europe/Warsaw")
+    await hass.config.async_update(latitude=52.2297, longitude=21.0122, elevation=100)
+    hass.states.async_set("switch.flower_light", "off")
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Flower Light",
+        data={
+            CONF_NAME: "Flower Light",
+            CONF_TARGET_ENTITY: "switch.flower_light",
+            CONF_TARGET_PHOTOPERIOD: 14.0,
+            CONF_LIGHTING_MODE: "both",
+            CONF_MORNING_SPLIT: 50.0,
+            CONF_DAYLIGHT_OVERLAP: 1.0,
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    switch = hass.states.get("switch.flower_light_automation")
+    assert switch is not None
+    attrs = switch.attributes
+
+    # Check that extra_state_attributes contain all timeline and metric data needed by the card
+    assert "supplementary_hours" in attrs
+    assert "natural_daylight_hours" in attrs
+    assert "earliest_turn_on" in attrs
+    assert "today_morning_start" in attrs
+    assert "today_morning_end" in attrs
+    assert "today_evening_start" in attrs
+    assert "today_evening_end" in attrs
+    assert "seasonal_months" in attrs
+    assert len(attrs["seasonal_months"]) == 12
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
 
 

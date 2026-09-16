@@ -40,7 +40,13 @@ _LOGGER = logging.getLogger(__name__)
 class AdaptiveGrowthLightCoordinator:
     """Manages solar photoperiod calculations and automated lighting schedules."""
 
-    def __init__(self, hass: HomeAssistant, entry_id: str, data: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry_id: str,
+        data: dict[str, Any],
+        sw_version: str = "1.1.6",
+    ) -> None:
         self.hass = hass
         self.entry_id = entry_id
         self.name: str = data.get(CONF_NAME, DEFAULT_NAME)
@@ -58,13 +64,7 @@ class AdaptiveGrowthLightCoordinator:
         self.earliest_start = parse_time_helper(data.get(CONF_EARLIEST_START))
         self.latest_end = parse_time_helper(data.get(CONF_LATEST_END))
         self.is_enabled: bool = DEFAULT_ENABLED
-
-        manifest_path = Path(__file__).parent / "manifest.json"
-        try:
-            with open(manifest_path, "r", encoding="utf-8") as f:
-                self.sw_version: str = json.load(f).get("version", "1.1.1")
-        except Exception:
-            self.sw_version = "1.1.1"
+        self.sw_version: str = sw_version
 
         # Track if light was turned on by this automation
         self._turned_on_by_automation: bool = False

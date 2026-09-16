@@ -89,7 +89,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await async_register_frontend(hass)
     hass.data.setdefault(DOMAIN, {})
 
-    coordinator = AdaptiveGrowthLightCoordinator(hass, entry.entry_id, entry.data)
+    sw_version = "1.1.6"
+    try:
+        from homeassistant.loader import async_get_integration
+        integration = await async_get_integration(hass, DOMAIN)
+        if integration and integration.version:
+            sw_version = str(integration.version)
+    except Exception:
+        pass
+
+    coordinator = AdaptiveGrowthLightCoordinator(
+        hass, entry.entry_id, entry.data, sw_version=sw_version
+    )
     await coordinator.async_setup()
 
     hass.data[DOMAIN][entry.entry_id] = coordinator

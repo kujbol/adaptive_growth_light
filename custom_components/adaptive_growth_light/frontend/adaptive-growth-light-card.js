@@ -1,10 +1,10 @@
 /**
  * Adaptive Growth Light Card for Home Assistant Lovelace
  * Author: @kujbol
- * Version: 1.0.0
+ * Version: 1.1.6
  */
 
-const CARD_VERSION = "1.1.5";
+const CARD_VERSION = "1.1.6";
 
 console.info(
   `%c ADAPTIVE-GROWTH-LIGHT-CARD %c v${CARD_VERSION} `,
@@ -17,7 +17,23 @@ class AdaptiveGrowthLightCard extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._isExpanded = false;
+    this._modalOpen = false;
     this._tooltipData = null;
+  }
+
+  connectedCallback() {
+    this._onKeyDown = (e) => {
+      if (e.key === "Escape" && this._modalOpen) {
+        this._closeModal();
+      }
+    };
+    window.addEventListener("keydown", this._onKeyDown);
+  }
+
+  disconnectedCallback() {
+    if (this._onKeyDown) {
+      window.removeEventListener("keydown", this._onKeyDown);
+    }
   }
 
   setConfig(config) {
@@ -27,16 +43,23 @@ class AdaptiveGrowthLightCard extends HTMLElement {
     this._config = {
       name: config.name,
       entity: config.entity || config.automation_switch,
-      expanded_by_default: config.expanded_by_default || false,
+      layout: config.layout || "compact",
       ...config,
     };
-    if (this._config.expanded_by_default) {
-      this._isExpanded = true;
-    }
   }
 
   set hass(hass) {
     this._hass = hass;
+    this.render();
+  }
+
+  _openModal() {
+    this._modalOpen = true;
+    this.render();
+  }
+
+  _closeModal() {
+    this._modalOpen = false;
     this.render();
   }
 
@@ -48,15 +71,18 @@ class AdaptiveGrowthLightCard extends HTMLElement {
     let baseName = baseEntityId.split(".")[1] || "";
     baseName = baseName.replace(/_(automation|status|automation_switch|target_photoperiod)$/, "");
 
-    const domainPrefix = (d) => `${d}.${baseName}`;
-
-    const resolveEntity = (domain, suffix) => {
-      const direct = `${domain}.${baseName}_${suffix}`;
-      if (this._hass.states[direct]) return this._hass.states[direct];
-      // Try fuzzy search
+    const resolveEntity = (domain, patterns) => {
+      const patternList = Array.isArray(patterns) ? patterns : [patterns];
+      for (const p of patternList) {
+        const direct = `${domain}.${baseName}_${p}`;
+        if (this._hass.states[direct]) return this._hass.states[direct];
+      }
+      // Fuzzy search across states
       for (const eid in this._hass.states) {
-        if (eid.startsWith(`${domain}.`) && eid.includes(baseName) && eid.endsWith(suffix)) {
-          return this._hass.states[eid];
+        if (!eid.startsWith(`${domain}.`)) continue;
+        if (!eid.includes(baseName)) continue;
+        for (const p of patternList) {
+          if (eid.includes(p)) return this._hass.states[eid];
         }
       }
       return null;
@@ -65,20 +91,20 @@ class AdaptiveGrowthLightCard extends HTMLElement {
     const automationSwitch =
       this._hass.states[baseEntityId]?.attributes?.target_entity !== undefined
         ? this._hass.states[baseEntityId]
-        : resolveEntity("switch", "automation") || this._hass.states[baseEntityId];
+        : resolveEntity("switch", ["automation", "automation_switch"]) || this._hass.states[baseEntityId];
 
-    const statusSensor = resolveEntity("sensor", "status");
-    const nextSessionSensor = resolveEntity("sensor", "next_session");
-    const suppHoursSensor = resolveEntity("sensor", "supplementary_hours");
-    const naturalDaylightSensor = resolveEntity("sensor", "natural_daylight");
-    const seasonalProfileSensor = resolveEntity("sensor", "seasonal_profile");
-    const earliestTurnOnSensor = resolveEntity("sensor", "earliest_turn_on");
-    const targetPhotoperiodNumber = resolveEntity("number", "target_photoperiod");
-    const morningSplitNumber = resolveEntity("number", "morning_split");
-    const daylightOverlapNumber = resolveEntity("number", "daylight_overlap");
-    const earliestStartEntity = resolveEntity("time", "earliest_start");
-    const latestEndEntity = resolveEntity("time", "latest_end");
-    const lightingModeSelect = resolveEntity("select", "lighting_mode");
+    const statusSensor = resolveEntity("sensor", ["status"]);
+    const nextSessionSensor = resolveEntity("sensor", ["next_session"]);
+    const suppHoursSensor = resolveEntity("sensor", ["supplementary_hours_today", "supplementary_hours"]);
+    const naturalDaylightSensor = resolveEntity("sensor", ["natural_daylight_today", "natural_daylight"]);
+    const seasonalProfileSensor = resolveEntity("sensor", ["seasonal_profile"]);
+    const earliestTurnOnSensor = resolveEntity("sensor", ["earliest_turn_on_of_year", "earliest_turn_on"]);
+    const targetPhotoperiodNumber = resolveEntity("number", ["target_photoperiod"]);
+    const morningSplitNumber = resolveEntity("number", ["morning_split"]);
+    const daylightOverlapNumber = resolveEntity("number", ["daylight_overlap"]);
+    const earliestStartEntity = resolveEntity("time", ["earliest_morning_start", "earliest_start"]);
+    const latestEndEntity = resolveEntity("time", ["latest_evening_end", "latest_end"]);
+    const lightingModeSelect = resolveEntity("select", ["lighting_mode"]);
 
     return {
       automationSwitch,
@@ -98,7 +124,7 @@ class AdaptiveGrowthLightCard extends HTMLElement {
   }
 
   _toggleAutomation(e) {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     const { automationSwitch } = this._findCompanionEntities();
     if (!automationSwitch) return;
 
@@ -109,7 +135,7 @@ class AdaptiveGrowthLightCard extends HTMLElement {
   }
 
   _toggleTargetLight(e) {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     const { automationSwitch } = this._findCompanionEntities();
     const targetEntityId = automationSwitch?.attributes?.target_entity;
     if (!targetEntityId || !this._hass.states[targetEntityId]) return;
@@ -225,7 +251,7 @@ class AdaptiveGrowthLightCard extends HTMLElement {
       case "night_idle":
       default:
         return {
-          label: "Idle (Rest)",
+          label: "Idle (Night)",
           class: "badge-idle",
           icon: "M12 2a10 10 0 1010 10A10 10 0 0012 2zm1 17.93V18c0-.55-.45-1-1-1s-1 .45-1 1v1.93A8.001 8.001 0 014.07 13H6c.55 0 1-.45 1-1s-.45-1-1-1H4.07A8.001 8.001 0 0111 4.07V6c0 .55.45 1 1 1s1-.45 1-1V4.07A8.001 8.001 0 0119.93 11H18c-.55 0-1 .45-1 1s.45 1 1 1h1.93A8.001 8.001 0 0113 19.93z",
         };
@@ -250,42 +276,42 @@ class AdaptiveGrowthLightCard extends HTMLElement {
       const natH = Math.min(maxHourScale, m.natural_hours || 0);
       const suppH = Math.min(maxHourScale - natH, m.supplementary_hours || 0);
 
-      const natHeight = (natH / maxHourScale) * (chartHeight - 20);
-      const suppHeight = (suppH / maxHourScale) * (chartHeight - 20);
+      const natPixelH = (natH / maxHourScale) * (chartHeight - 20);
+      const suppPixelH = (suppH / maxHourScale) * (chartHeight - 20);
 
-      const natY = chartHeight - 20 - natHeight;
-      const suppY = natY - suppHeight;
+      const natY = chartHeight - 20 - natPixelH;
+      const suppY = natY - suppPixelH;
 
-      const isCurrentMonth = m.month === currentMonthIdx;
-      const highlightStroke = isCurrentMonth ? `stroke="#34d399" stroke-width="2"` : "";
+      const isCurrent = m.month === currentMonthIdx;
 
       barsSvg += `
-        <g class="month-col" data-month="${m.name}" data-nat="${m.natural_hours}" data-supp="${m.supplementary_hours}" data-target="${m.target_hours}">
-          <!-- Natural daylight bar (amber/gold) -->
-          <rect x="${x}" y="${natY}" width="${barWidth}" height="${natHeight}" rx="3" fill="url(#sun-grad)" opacity="${isCurrentMonth ? '1.0' : '0.8'}" />
-          <!-- Supplementary light bar (emerald/growth) -->
-          ${suppHeight > 0 ? `
-            <rect x="${x}" y="${suppY}" width="${barWidth}" height="${suppHeight}" rx="3" fill="url(#plant-grad)" opacity="${isCurrentMonth ? '1.0' : '0.85'}" ${highlightStroke} />
-          ` : ""}
-          <!-- Month label -->
-          <text x="${x + barWidth / 2}" y="${chartHeight - 5}" text-anchor="middle" font-size="9" fill="${isCurrentMonth ? '#34d399' : '#9ca3af'}" font-weight="${isCurrentMonth ? '700' : '500'}">
-            ${m.name}
-          </text>
-        </g>
+        <!-- Natural sun bar -->
+        <rect x="${x}" y="${natY}" width="${barWidth}" height="${natPixelH}" fill="url(#sun-grad)" rx="2" opacity="${isCurrent ? '1.0' : '0.8'}" />
+        <!-- Supplementary light bar -->
+        ${suppPixelH > 0 ? `
+          <rect x="${x}" y="${suppY}" width="${barWidth}" height="${suppPixelH}" fill="url(#plant-grad)" rx="2" opacity="${isCurrent ? '1.0' : '0.85'}" />
+        ` : ""}
+        <!-- Current month highlight ring -->
+        ${isCurrent ? `
+          <rect x="${x-1}" y="${suppPixelH > 0 ? suppY-1 : natY-1}" width="${barWidth+2}" height="${natPixelH + suppPixelH + 2}" fill="none" stroke="#34d399" stroke-width="1.5" rx="3" />
+        ` : ""}
+        <!-- Month label -->
+        <text x="${x + barWidth / 2}" y="${chartHeight - 6}" text-anchor="middle" font-size="8" fill="${isCurrent ? '#34d399' : '#9ca3af'}" font-weight="${isCurrent ? '700' : '500'}">
+          ${m.month_name ? m.month_name.substring(0, 1) : m.month}
+        </text>
       `;
     });
 
-    // Target photoperiod line
-    const targetY = chartHeight - 20 - (Math.min(maxHourScale, currentTarget) / maxHourScale) * (chartHeight - 20);
+    const targetY = chartHeight - 20 - (currentTarget / maxHourScale) * (chartHeight - 20);
 
     return `
-      <div class="seasonal-chart-container">
-        <div class="chart-header">
-          <span class="chart-title">Year-Round Photoperiod Matrix</span>
-          <span class="chart-legend">
-            <span class="legend-item"><span class="dot sun-dot"></span>Natural Daylight</span>
-            <span class="legend-item"><span class="dot plant-dot"></span>Supplement</span>
-          </span>
+      <div class="seasonal-chart-card">
+        <div class="seasonal-header">
+          <span class="seasonal-title">Seasonal Daylight vs. Supplementary Matrix</span>
+          <div class="seasonal-legend">
+            <span class="legend-item"><span class="dot sun-dot"></span>Sun</span>
+            <span class="legend-item"><span class="dot plant-dot"></span>Grow Light</span>
+          </div>
         </div>
         <svg viewBox="0 0 ${chartWidth} ${chartHeight}" class="seasonal-svg">
           <defs>
@@ -299,7 +325,7 @@ class AdaptiveGrowthLightCard extends HTMLElement {
             </linearGradient>
           </defs>
 
-          <!-- Grid horizontal lines at 8h, 12h, 16h -->
+          <!-- Grid lines -->
           <line x1="0" y1="${chartHeight - 20 - (8 / maxHourScale) * (chartHeight - 20)}" x2="${chartWidth}" y2="${chartHeight - 20 - (8 / maxHourScale) * (chartHeight - 20)}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
           <line x1="0" y1="${chartHeight - 20 - (12 / maxHourScale) * (chartHeight - 20)}" x2="${chartWidth}" y2="${chartHeight - 20 - (12 / maxHourScale) * (chartHeight - 20)}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
           <line x1="0" y1="${chartHeight - 20 - (16 / maxHourScale) * (chartHeight - 20)}" x2="${chartWidth}" y2="${chartHeight - 20 - (16 / maxHourScale) * (chartHeight - 20)}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
@@ -314,11 +340,16 @@ class AdaptiveGrowthLightCard extends HTMLElement {
     `;
   }
 
-  _renderDayTimeline(statusSensor, earliestTurnOnSensor, earliestStartEntity, latestEndEntity) {
-    const sunriseStr = statusSensor?.attributes?.sunrise;
-    const sunsetStr = statusSensor?.attributes?.sunset;
+  _renderDayTimeline(statusSensor, earliestTurnOnSensor, earliestStartEntity, latestEndEntity, automationSwitch) {
+    const sunriseStr = automationSwitch?.attributes?.sunrise || statusSensor?.attributes?.sunrise;
+    const sunsetStr = automationSwitch?.attributes?.sunset || statusSensor?.attributes?.sunset;
     const earliestStats = earliestTurnOnSensor?.attributes || {};
-    const earliestEff = earliestTurnOnSensor?.state || "--:--";
+    const earliestEff = automationSwitch?.attributes?.earliest_turn_on || earliestTurnOnSensor?.state || "--:--";
+
+    const mornStartStr = automationSwitch?.attributes?.today_morning_start || earliestStats.today_morning_start;
+    const mornEndStr = automationSwitch?.attributes?.today_morning_end || earliestStats.today_morning_end;
+    const eveStartStr = automationSwitch?.attributes?.today_evening_start || earliestStats.today_evening_start;
+    const eveEndStr = automationSwitch?.attributes?.today_evening_end || earliestStats.today_evening_end;
 
     const parseIsoHour = (iso) => {
       if (!iso) return null;
@@ -331,13 +362,13 @@ class AdaptiveGrowthLightCard extends HTMLElement {
       return parseInt(parts[0], 10) + parseInt(parts[1], 10) / 60.0;
     };
 
-    const sunriseH = parseIsoHour(sunriseStr) ?? 6.5;
-    const sunsetH = parseIsoHour(sunsetStr) ?? 18.5;
+    const sunriseH = parseIsoHour(sunriseStr) ?? 6.2;
+    const sunsetH = parseIsoHour(sunsetStr) ?? 18.8;
 
-    const mornStartStr = earliestStats.today_morning_start;
-    const eveStartStr = earliestStats.today_evening_start;
     const mornStartH = parseTimeStr(mornStartStr);
-    const eveStartH = parseTimeStr(eveStartStr);
+    const mornEndH = parseTimeStr(mornEndStr) ?? sunriseH;
+    const eveStartH = parseTimeStr(eveStartStr) ?? sunsetH;
+    const eveEndH = parseTimeStr(eveEndStr);
 
     const hasValidEarliest = earliestStartEntity && earliestStartEntity.state && earliestStartEntity.state !== "unknown" && earliestStartEntity.state !== "unavailable";
     const hasValidLatest = latestEndEntity && latestEndEntity.state && latestEndEntity.state !== "unknown" && latestEndEntity.state !== "unavailable";
@@ -379,21 +410,23 @@ class AdaptiveGrowthLightCard extends HTMLElement {
       rectsSvg += `<rect x="${cutX}" y="${barY}" width="${width - cutX}" height="${barH}" rx="4" fill="rgba(239, 68, 68, 0.18)" stroke="rgba(239, 68, 68, 0.35)" stroke-dasharray="2,2" stroke-width="1" />`;
     }
 
-    // Morning grow light session
-    if (mornStartH !== null && mornStartH < sunriseH) {
+    // Morning grow light session (green)
+    if (mornStartH !== null) {
       const startX = scaleX(mornStartH);
-      const endX = scaleX(sunriseH);
-      rectsSvg += `<rect x="${startX}" y="${barY}" width="${Math.max(2, endX - startX)}" height="${barH}" fill="#10b981" rx="2" opacity="0.95" />`;
+      const endX = scaleX(mornEndH);
+      if (endX > startX) {
+        rectsSvg += `<rect x="${startX}" y="${barY}" width="${Math.max(2, endX - startX)}" height="${barH}" fill="#10b981" rx="2" opacity="0.95" />`;
+      }
     }
 
-    // Natural daylight
+    // Natural daylight (amber)
     const sunStartX = scaleX(sunriseH);
     const sunEndX = scaleX(sunsetH);
     rectsSvg += `<rect x="${sunStartX}" y="${barY}" width="${Math.max(2, sunEndX - sunStartX)}" height="${barH}" fill="#f59e0b" rx="2" opacity="0.95" />`;
 
-    // Evening grow light session
+    // Evening grow light session (green)
     if (eveStartH !== null) {
-      const eveLimit = latestCutoffH && latestCutoffH < 24 ? latestCutoffH : 24;
+      const eveLimit = latestCutoffH && latestCutoffH < 24 ? latestCutoffH : (eveEndH !== null ? eveEndH : 24);
       const eveEndX = scaleX(eveLimit);
       const startX = scaleX(eveStartH);
       if (eveEndX > startX) {
@@ -401,7 +434,7 @@ class AdaptiveGrowthLightCard extends HTMLElement {
       }
     }
 
-    // Now indicator
+    // Now indicator (cyan needle)
     const nowX = scaleX(nowH);
     const nowSvg = `
       <line x1="${nowX}" y1="${barY - 3}" x2="${nowX}" y2="${barY + barH + 3}" stroke="#38bdf8" stroke-width="2" />
@@ -420,7 +453,7 @@ class AdaptiveGrowthLightCard extends HTMLElement {
           ${nowSvg}
         </svg>
         <div class="timeline-legend">
-          <span class="legend-item"><span class="dot sun-dot"></span>Sunlight (${sunriseStr ? new Date(sunriseStr).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '06:30'} - ${sunsetStr ? new Date(sunsetStr).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '18:30'})</span>
+          <span class="legend-item"><span class="dot sun-dot"></span>Sunlight (${sunriseStr ? new Date(sunriseStr).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '06:12'} - ${sunsetStr ? new Date(sunsetStr).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '18:48'})</span>
           <span class="legend-item"><span class="dot plant-dot"></span>Grow Light</span>
           <span class="legend-item"><span class="dot cutoff-dot"></span>Cut-Off Restricted</span>
         </div>
@@ -448,25 +481,39 @@ class AdaptiveGrowthLightCard extends HTMLElement {
     } = this._findCompanionEntities();
 
     const isEnabled = automationSwitch ? automationSwitch.state === "on" : true;
-    const currentStatus = statusSensor ? statusSensor.state : "idle";
-    const nextSessionText = nextSessionSensor ? nextSessionSensor.state : "Scheduled dynamically";
-    const suppHours = suppHoursSensor ? parseFloat(suppHoursSensor.state) || 0 : 0;
-    const daylightHours = naturalDaylightSensor ? parseFloat(naturalDaylightSensor.state) || 0 : 0;
-    const targetHours = targetPhotoperiodNumber ? parseFloat(targetPhotoperiodNumber.state) || 14.0 : 14.0;
-    const morningSplit = morningSplitNumber ? parseFloat(morningSplitNumber.state) || 50.0 : 50.0;
-    const daylightOverlap = daylightOverlapNumber ? parseFloat(daylightOverlapNumber.state) || 1.0 : 1.0;
-    const lightingMode = lightingModeSelect ? lightingModeSelect.state : "both";
+    const currentStatus = automationSwitch?.attributes?.status || (statusSensor ? statusSensor.state : "idle");
+    const nextSessionText = automationSwitch?.attributes?.next_session_str || (nextSessionSensor ? nextSessionSensor.state : "Scheduled dynamically");
+    const suppHours = automationSwitch?.attributes?.supplementary_hours !== undefined
+      ? automationSwitch.attributes.supplementary_hours
+      : (suppHoursSensor ? parseFloat(suppHoursSensor.state) || 0 : 0);
+    const daylightHours = automationSwitch?.attributes?.natural_daylight_hours !== undefined
+      ? automationSwitch.attributes.natural_daylight_hours
+      : (naturalDaylightSensor ? parseFloat(naturalDaylightSensor.state) || 0 : 0);
+    const targetHours = targetPhotoperiodNumber
+      ? parseFloat(targetPhotoperiodNumber.state) || 14.0
+      : (automationSwitch?.attributes?.target_photoperiod || 14.0);
+    const morningSplit = morningSplitNumber
+      ? parseFloat(morningSplitNumber.state) || 50.0
+      : (automationSwitch?.attributes?.morning_split || 50.0);
+    const daylightOverlap = daylightOverlapNumber
+      ? parseFloat(daylightOverlapNumber.state) || 1.0
+      : (automationSwitch?.attributes?.daylight_overlap || 1.0);
+    const lightingMode = lightingModeSelect
+      ? lightingModeSelect.state
+      : (automationSwitch?.attributes?.lighting_mode || "both");
     const hasEarliestStart = earliestStartEntity && earliestStartEntity.state && earliestStartEntity.state !== "unknown" && earliestStartEntity.state !== "unavailable";
     const earliestStartVal = hasEarliestStart ? earliestStartEntity.state.substring(0, 5) : "";
     const hasLatestEnd = latestEndEntity && latestEndEntity.state && latestEndEntity.state !== "unknown" && latestEndEntity.state !== "unavailable";
     const latestEndVal = hasLatestEnd ? latestEndEntity.state.substring(0, 5) : "";
 
-    const seasonalMonths = seasonalProfileSensor?.attributes?.months || [];
+    const seasonalMonths = automationSwitch?.attributes?.seasonal_months || seasonalProfileSensor?.attributes?.months || [];
     const targetEntityId = automationSwitch?.attributes?.target_entity || "";
     const targetState = targetEntityId && this._hass.states[targetEntityId] ? this._hass.states[targetEntityId].state : null;
 
     const friendlyName = this._config.name || automationSwitch?.attributes?.friendly_name?.replace(/ Automation$/, "") || "Adaptive Plant Light";
     const badge = this._getStatusBadge(currentStatus, isEnabled);
+
+    const isExpandedLayout = this._config.layout === "expanded";
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -475,26 +522,250 @@ class AdaptiveGrowthLightCard extends HTMLElement {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
           color: #f3f4f6;
         }
-        ha-card {
+
+        /* Compact Tile Card */
+        .compact-tile {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 16px;
+          min-height: 74px;
+          box-sizing: border-box;
+          border-radius: 16px;
+          background: linear-gradient(135deg, rgba(20, 29, 25, 0.95) 0%, rgba(13, 20, 18, 0.98) 100%);
+          border: 1px solid rgba(52, 211, 153, 0.2);
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+          cursor: pointer;
+          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+          user-select: none;
+          gap: 14px;
+        }
+        .compact-tile:hover {
+          border-color: rgba(52, 211, 153, 0.4);
+          box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 16px rgba(16, 185, 129, 0.12);
+          transform: translateY(-1px);
+        }
+
+        .tile-left {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex: 1;
+          min-width: 0;
+        }
+        .tile-icon-wrap {
+          width: 44px;
+          height: 44px;
+          border-radius: 12px;
+          background: rgba(16, 185, 129, 0.12);
+          border: 1px solid rgba(52, 211, 153, 0.25);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          color: #34d399;
+          transition: all 0.3s ease;
+        }
+        .tile-icon-wrap.active {
+          box-shadow: 0 0 14px rgba(52, 211, 153, 0.5);
+          border-color: rgba(52, 211, 153, 0.6);
+          color: #10b981;
+        }
+        .tile-icon-wrap svg {
+          width: 24px;
+          height: 24px;
+          fill: currentColor;
+        }
+        .tile-info {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          min-width: 0;
+        }
+        .tile-title {
+          font-size: 15px;
+          font-weight: 600;
+          color: #f8fafc;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .tile-status-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 12px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .tile-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 2px 8px;
+          border-radius: 10px;
+          font-size: 11px;
+          font-weight: 600;
+        }
+        .tile-next {
+          color: #9ca3af;
+          font-size: 11px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .tile-stats-row {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 11px;
+          font-weight: 500;
+          color: #94a3b8;
+          margin-top: 1px;
+        }
+        .stat-sun { color: #f59e0b; }
+        .stat-supp { color: #10b981; }
+        .stat-target { color: #f1f5f9; font-weight: 600; }
+
+        .tile-right {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-shrink: 0;
+        }
+        .tile-chevron {
+          color: #64748b;
+          display: flex;
+          align-items: center;
+          transition: all 0.2s;
+        }
+        .compact-tile:hover .tile-chevron {
+          color: #34d399;
+          transform: translateX(2px);
+        }
+
+        /* Toggle Switch */
+        .toggle-switch {
+          position: relative;
+          display: inline-block;
+          width: 44px;
+          height: 24px;
+          cursor: pointer;
+        }
+        .toggle-switch input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+        }
+        .slider {
+          position: absolute;
+          cursor: pointer;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background-color: #374151;
+          border: 1px solid rgba(255,255,255,0.1);
+          transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+          border-radius: 24px;
+        }
+        .slider:before {
+          position: absolute;
+          content: "";
+          height: 18px;
+          width: 18px;
+          left: 2px;
+          bottom: 2px;
+          background-color: white;
+          transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+          border-radius: 50%;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        input:checked + .slider {
+          background-color: #059669;
+          box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+        }
+        input:checked + .slider:before {
+          transform: translateX(20px);
+        }
+
+        /* Modal Popup */
+        .modal-backdrop {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          background: rgba(0, 0, 0, 0.78);
+          backdrop-filter: blur(10px);
+          z-index: 99999;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 16px;
+          box-sizing: border-box;
+          animation: fadeIn 0.2s ease-out;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .modal-dialog {
+          background: linear-gradient(135deg, rgba(20, 29, 25, 0.98) 0%, rgba(13, 20, 18, 0.99) 100%);
+          border: 1px solid rgba(52, 211, 153, 0.3);
+          border-radius: 20px;
+          box-shadow: 0 25px 60px rgba(0, 0, 0, 0.75), 0 0 30px rgba(16, 185, 129, 0.15);
+          width: 100%;
+          max-width: 520px;
+          max-height: 90vh;
+          overflow-y: auto;
+          padding: 22px;
+          box-sizing: border-box;
+          position: relative;
+          animation: scaleUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes scaleUp {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .modal-close-btn {
+          position: absolute;
+          top: 16px;
+          right: 16px;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          color: #94a3b8;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          font-size: 16px;
+          transition: all 0.2s;
+        }
+        .modal-close-btn:hover {
+          background: rgba(239, 68, 68, 0.2);
+          color: #f87171;
+          border-color: rgba(239, 68, 68, 0.4);
+        }
+
+        /* Expanded Mode Card */
+        .expanded-card {
           background: linear-gradient(135deg, rgba(20, 29, 25, 0.95) 0%, rgba(13, 20, 18, 0.98) 100%);
           backdrop-filter: blur(16px);
           border-radius: 18px;
           border: 1px solid rgba(52, 211, 153, 0.18);
-          box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), 0 0 24px rgba(16, 185, 129, 0.08);
-          overflow: hidden;
+          box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
           padding: 18px;
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        ha-card:hover {
-          border-color: rgba(52, 211, 153, 0.3);
-          box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5), 0 0 30px rgba(16, 185, 129, 0.12);
-        }
-        /* Header */
-        .card-header {
+
+        /* Modal Header */
+        .modal-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin-bottom: 14px;
+          margin-bottom: 16px;
+          padding-right: 36px;
         }
         .header-title-area {
           display: flex;
@@ -510,7 +781,6 @@ class AdaptiveGrowthLightCard extends HTMLElement {
           display: flex;
           align-items: center;
           justify-content: center;
-          position: relative;
         }
         .plant-icon-wrap.active {
           box-shadow: 0 0 16px rgba(52, 211, 153, 0.6);
@@ -521,14 +791,9 @@ class AdaptiveGrowthLightCard extends HTMLElement {
           height: 22px;
           fill: #34d399;
         }
-        .name-area {
-          display: flex;
-          flex-direction: column;
-        }
         .card-title {
           font-size: 17px;
           font-weight: 700;
-          letter-spacing: -0.2px;
           color: #f9fafb;
         }
         .card-subtitle {
@@ -538,52 +803,8 @@ class AdaptiveGrowthLightCard extends HTMLElement {
           letter-spacing: 0.8px;
           margin-top: 1px;
         }
-        /* Toggle Switch */
-        .switch-wrap {
-          display: flex;
-          align-items: center;
-        }
-        .toggle-switch {
-          position: relative;
-          display: inline-block;
-          width: 46px;
-          height: 26px;
-          cursor: pointer;
-        }
-        .toggle-switch input {
-          opacity: 0;
-          width: 0;
-          height: 0;
-        }
-        .slider {
-          position: absolute;
-          cursor: pointer;
-          top: 0; left: 0; right: 0; bottom: 0;
-          background-color: #374151;
-          border: 1px solid rgba(255,255,255,0.1);
-          transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
-          border-radius: 26px;
-        }
-        .slider:before {
-          position: absolute;
-          content: "";
-          height: 20px;
-          width: 20px;
-          left: 2px;
-          bottom: 2px;
-          background-color: white;
-          transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
-          border-radius: 50%;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-        input:checked + .slider {
-          background-color: #059669;
-          box-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
-        }
-        input:checked + .slider:before {
-          transform: translateX(20px);
-        }
-        /* Status Badge */
+
+        /* Status Banner */
         .status-bar {
           display: flex;
           align-items: center;
@@ -599,35 +820,28 @@ class AdaptiveGrowthLightCard extends HTMLElement {
           gap: 6px;
           font-size: 12px;
           font-weight: 600;
-          padding: 4px 9px;
-          border-radius: 6px;
-        }
-        .badge svg {
-          width: 14px;
-          height: 14px;
+          padding: 4px 10px;
+          border-radius: 20px;
         }
         .badge-active-morn, .badge-active-eve {
           background: rgba(16, 185, 129, 0.2);
           color: #34d399;
-          border: 1px solid rgba(52, 211, 153, 0.35);
-          animation: pulse-glow 2s infinite ease-in-out;
+          border: 1px solid rgba(52, 211, 153, 0.4);
         }
         .badge-daylight {
           background: rgba(245, 158, 11, 0.2);
           color: #fbbf24;
-          border: 1px solid rgba(245, 158, 11, 0.35);
+          border: 1px solid rgba(245, 158, 11, 0.4);
         }
         .badge-idle {
-          background: rgba(156, 163, 175, 0.15);
-          color: #d1d5db;
+          background: rgba(107, 114, 128, 0.2);
+          color: #9ca3af;
+          border: 1px solid rgba(156, 163, 175, 0.3);
         }
         .badge-disabled {
           background: rgba(239, 68, 68, 0.2);
           color: #f87171;
-        }
-        @keyframes pulse-glow {
-          0%, 100% { box-shadow: 0 0 6px rgba(52, 211, 153, 0.2); }
-          50% { box-shadow: 0 0 14px rgba(52, 211, 153, 0.6); }
+          border: 1px solid rgba(239, 68, 68, 0.3);
         }
         .next-session-text {
           font-size: 12px;
@@ -636,6 +850,58 @@ class AdaptiveGrowthLightCard extends HTMLElement {
           align-items: center;
           gap: 4px;
         }
+
+        /* Day Timeline */
+        .day-timeline-card {
+          background: rgba(0, 0, 0, 0.25);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 14px;
+          padding: 12px;
+          margin-bottom: 14px;
+        }
+        .timeline-title-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 8px;
+        }
+        .timeline-title {
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.8px;
+          color: #9ca3af;
+        }
+        .earliest-badge {
+          font-size: 11px;
+          background: rgba(16, 185, 129, 0.15);
+          color: #34d399;
+          border: 1px solid rgba(52, 211, 153, 0.3);
+          border-radius: 6px;
+          padding: 2px 8px;
+        }
+        .timeline-legend {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          margin-top: 8px;
+          font-size: 10px;
+          color: #9ca3af;
+        }
+        .legend-item {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+        }
+        .sun-dot { background: #f59e0b; }
+        .plant-dot { background: #10b981; }
+        .cutoff-dot { background: rgba(239, 68, 68, 0.8); }
+
         /* Metrics Grid */
         .metrics-grid {
           display: grid;
@@ -645,119 +911,61 @@ class AdaptiveGrowthLightCard extends HTMLElement {
         }
         .metric-card {
           background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.07);
           border-radius: 12px;
-          padding: 10px;
+          padding: 10px 8px;
+          text-align: center;
           display: flex;
           flex-direction: column;
-          align-items: center;
-          text-align: center;
+          gap: 3px;
+        }
+        .metric-card.highlight {
+          border-color: rgba(52, 211, 153, 0.3);
+          background: rgba(16, 185, 129, 0.05);
+        }
+        .metric-card.sun {
+          border-color: rgba(245, 158, 11, 0.3);
+          background: rgba(245, 158, 11, 0.05);
+        }
+        .metric-label {
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 0.6px;
+          color: #9ca3af;
         }
         .metric-value {
           font-size: 18px;
           font-weight: 700;
-          color: #f9fafb;
-          margin-top: 2px;
+          color: #f3f4f6;
         }
-        .metric-label {
-          font-size: 10px;
-          color: #9ca3af;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-        .metric-card.highlight {
-          border-color: rgba(52, 211, 153, 0.3);
-          background: rgba(16, 185, 129, 0.06);
-        }
-        .metric-card.highlight .metric-value {
-          color: #34d399;
-        }
-        .metric-card.sun .metric-value {
-          color: #fbbf24;
-        }
-        /* Expand Toggle */
-        .expand-btn {
-          width: 100%;
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 8px;
-          padding: 7px;
-          color: #d1d5db;
-          font-size: 11px;
-          font-weight: 600;
-          letter-spacing: 0.5px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          transition: all 0.2s ease;
-        }
-        .expand-btn:hover {
-          background: rgba(255, 255, 255, 0.09);
-          color: #fff;
-        }
-        .expand-btn svg {
-          width: 14px;
-          height: 14px;
-          transition: transform 0.3s ease;
-        }
-        .expand-btn.expanded svg {
-          transform: rotate(180deg);
-        }
+        .metric-card.highlight .metric-value { color: #10b981; }
+        .metric-card.sun .metric-value { color: #f59e0b; }
+
         /* Advanced Panel */
         .advanced-panel {
-          margin-top: 14px;
-          padding-top: 14px;
           border-top: 1px solid rgba(255, 255, 255, 0.08);
-          animation: fadeIn 0.3s ease-in-out;
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(-6px); }
-          to { opacity: 1; transform: translateY(0); }
+          padding-top: 14px;
+          margin-top: 6px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
         }
         .control-group {
-          margin-bottom: 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
         }
         .control-label-row {
           display: flex;
           justify-content: space-between;
           font-size: 12px;
-          font-weight: 600;
-          color: #e5e7eb;
-          margin-bottom: 6px;
+          font-weight: 500;
+          color: #d1d5db;
         }
         .control-value {
           color: #34d399;
-          font-weight: 700;
-        }
-        /* Mode Select Buttons */
-        .mode-btn-group {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 6px;
-        }
-        .mode-btn {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 8px;
-          color: #9ca3af;
-          padding: 8px 4px;
-          font-size: 11px;
           font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s ease;
         }
-        .mode-btn:hover {
-          background: rgba(255, 255, 255, 0.1);
-          color: #fff;
-        }
-        .mode-btn.active {
-          background: rgba(16, 185, 129, 0.2);
-          border-color: rgba(52, 211, 153, 0.5);
-          color: #34d399;
-        }
-        /* Sliders */
         input[type=range] {
           -webkit-appearance: none;
           width: 100%;
@@ -770,230 +978,165 @@ class AdaptiveGrowthLightCard extends HTMLElement {
           width: 100%;
           height: 6px;
           cursor: pointer;
-          background: #374151;
+          background: rgba(255, 255, 255, 0.1);
           border-radius: 4px;
         }
         input[type=range]::-webkit-slider-thumb {
           height: 18px;
           width: 18px;
           border-radius: 50%;
-          background: #34d399;
+          background: #10b981;
           cursor: pointer;
           -webkit-appearance: none;
           margin-top: -6px;
-          box-shadow: 0 0 8px rgba(52, 211, 153, 0.6);
+          box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
         }
-        /* Seasonal Chart */
-        .seasonal-chart-container {
-          background: rgba(0, 0, 0, 0.2);
-          border: 1px solid rgba(255, 255, 255, 0.05);
-          border-radius: 12px;
-          padding: 12px;
-          margin-top: 14px;
-        }
-        .chart-header {
+        .mode-btn-group {
           display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 10px;
+          gap: 6px;
         }
-        .chart-title {
-          font-size: 11px;
-          font-weight: 700;
-          color: #d1d5db;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-        .chart-legend {
-          display: flex;
-          gap: 10px;
-          font-size: 10px;
+        .mode-btn {
+          flex: 1;
+          padding: 7px 6px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
           color: #9ca3af;
-        }
-        .legend-item {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
-        .dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-        }
-        .sun-dot { background: #fbbf24; }
-        .plant-dot { background: #34d399; }
-        .seasonal-svg {
-          width: 100%;
-          height: auto;
-          overflow: visible;
-        }
-        .month-col rect {
-          transition: opacity 0.2s ease, transform 0.2s ease;
-          cursor: pointer;
-        }
-        .month-col:hover rect {
-          opacity: 1 !important;
-          filter: brightness(1.2);
-        }
-        /* Manual Override Row */
-        .target-override-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          background: rgba(255, 255, 255, 0.03);
-          border-radius: 10px;
-          padding: 8px 12px;
-          margin-top: 14px;
-        }
-        .target-override-text {
-          font-size: 12px;
-          color: #9ca3af;
-        }
-        .manual-btn {
-          background: rgba(52, 211, 153, 0.15);
-          border: 1px solid rgba(52, 211, 153, 0.3);
-          color: #34d399;
           font-size: 11px;
           font-weight: 600;
-          border-radius: 6px;
-          padding: 5px 10px;
           cursor: pointer;
+          transition: all 0.2s;
         }
-        .manual-btn:hover {
-          background: rgba(52, 211, 153, 0.25);
+        .mode-btn.active {
+          background: rgba(16, 185, 129, 0.2);
+          border-color: #10b981;
+          color: #34d399;
         }
-        /* 24h Timeline Card */
-        .day-timeline-card {
-          background: rgba(0, 0, 0, 0.25);
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          border-radius: 12px;
-          padding: 10px 12px;
-          margin-bottom: 14px;
-        }
-        .timeline-title-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 6px;
-        }
-        .timeline-title {
-          font-size: 11px;
-          font-weight: 700;
-          color: #d1d5db;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-        .earliest-badge {
-          font-size: 11px;
-          color: #a7f3d0;
-          background: rgba(16, 185, 129, 0.15);
-          border: 1px solid rgba(52, 211, 153, 0.3);
-          border-radius: 6px;
-          padding: 2px 8px;
-        }
-        .timeline-legend {
+        .cutoff-row {
           display: flex;
           gap: 12px;
-          font-size: 10px;
-          color: #9ca3af;
-          margin-top: 8px;
-          flex-wrap: wrap;
-        }
-        .cutoff-dot { background: rgba(239, 68, 68, 0.85); }
-        /* Cutoff Row */
-        .cutoff-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px;
-          margin-top: 6px;
         }
         .cutoff-group {
+          flex: 1;
           display: flex;
           flex-direction: column;
           gap: 4px;
         }
         .cutoff-group label {
-          font-size: 11px;
+          font-size: 10px;
           color: #9ca3af;
-          font-weight: 600;
         }
         .cutoff-group input[type=time] {
           background: rgba(255, 255, 255, 0.05);
           border: 1px solid rgba(255, 255, 255, 0.12);
           border-radius: 8px;
-          color: #34d399;
-          font-weight: 700;
-          font-size: 13px;
-          padding: 6px 10px;
+          color: #f3f4f6;
+          padding: 6px 8px;
+          font-size: 12px;
           outline: none;
-          color-scheme: dark;
+        }
+
+        /* Seasonal Chart */
+        .seasonal-chart-card {
+          background: rgba(0, 0, 0, 0.25);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 12px;
+          padding: 10px;
+        }
+        .seasonal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 8px;
+        }
+        .seasonal-title {
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.6px;
+          color: #9ca3af;
+        }
+        .seasonal-legend {
+          display: flex;
+          gap: 8px;
+          font-size: 9px;
+          color: #9ca3af;
+        }
+        .target-override-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-top: 10px;
+          padding-top: 10px;
+          border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .target-override-text {
+          font-size: 11px;
+          color: #9ca3af;
+        }
+        .manual-btn {
+          padding: 6px 12px;
+          background: rgba(16, 185, 129, 0.15);
+          border: 1px solid rgba(52, 211, 153, 0.3);
+          border-radius: 8px;
+          color: #34d399;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .manual-btn:hover {
+          background: rgba(16, 185, 129, 0.25);
         }
       </style>
 
-      <ha-card>
-        <!-- Minimal Header -->
-        <div class="card-header">
-          <div class="header-title-area">
-            <div class="plant-icon-wrap ${badge.class.includes('active') ? 'active' : ''}">
-              <svg viewBox="0 0 24 24">
-                <path d="M12 2C6.48 2 2 6.48 2 12c0 3.84 2.16 7.18 5.34 8.87.16-.95.53-2.67 1.66-4.87 1.4-2.73 3.55-4.49 6.27-5.18.35 2.15-.35 4.93-2.02 7.21-.99 1.35-2.28 2.37-3.6 2.94 1.35.65 2.87 1.03 4.35 1.03 5.52 0 10-4.48 10-10S17.52 2 12 2z"/>
-              </svg>
+      ${isExpandedLayout ? `
+        <!-- Permanently Expanded Layout -->
+        <ha-card class="expanded-card">
+          <div class="modal-header" style="padding-right: 0;">
+            <div class="header-title-area">
+              <div class="plant-icon-wrap ${isEnabled ? 'active' : ''}">
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93V18c0-.55-.45-1-1-1s-1 .45-1 1v1.93A8.001 8.001 0 014.07 13H6c.55 0 1-.45 1-1s-.45-1-1-1H4.07A8.001 8.001 0 0111 4.07V6c0 .55.45 1 1 1s1-.45 1-1V4.07A8.001 8.001 0 0119.93 11H18c-.55 0-1 .45-1 1s.45 1 1 1h1.93A8.001 8.001 0 0113 19.93z"/></svg>
+              </div>
+              <div>
+                <div class="card-title">${friendlyName}</div>
+                <div class="card-subtitle">${lightingMode.toUpperCase()} ROUTINE</div>
+              </div>
             </div>
-            <div class="name-area">
-              <span class="card-title">${friendlyName}</span>
-              <span class="card-subtitle">${lightingMode.toUpperCase()} ROUTINE</span>
-            </div>
-          </div>
-          <!-- Master Switch Toggle -->
-          <div class="switch-wrap">
-            <label class="toggle-switch">
+            <label class="toggle-switch" id="master-toggle-wrap">
               <input type="checkbox" id="master-toggle" ${isEnabled ? "checked" : ""}>
               <span class="slider"></span>
             </label>
           </div>
-        </div>
 
-        <!-- Status & Next Session -->
-        <div class="status-bar">
-          <div class="badge ${badge.class}">
-            <svg viewBox="0 0 24 24"><path d="${badge.icon}"/></svg>
-            <span>${badge.label}</span>
+          <div class="status-bar">
+            <div class="badge ${badge.class}">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="${badge.icon}"/></svg>
+              <span>${badge.label}</span>
+            </div>
+            <div class="next-session-text">
+              <span>⏰</span>
+              <span>${nextSessionText}</span>
+            </div>
           </div>
-          <div class="next-session-text">
-            <span>⏰</span>
-            <span>${nextSessionText}</span>
-          </div>
-        </div>
 
-        <!-- 24h Photoperiod Timeline -->
-        ${this._renderDayTimeline(statusSensor, earliestTurnOnSensor, earliestStartEntity, latestEndEntity)}
+          ${this._renderDayTimeline(statusSensor, earliestTurnOnSensor, earliestStartEntity, latestEndEntity, automationSwitch)}
 
-        <!-- Minimal Metrics Grid -->
-        <div class="metrics-grid">
-          <div class="metric-card highlight">
-            <span class="metric-label">Supplement</span>
-            <span class="metric-value">${suppHours}h</span>
+          <div class="metrics-grid">
+            <div class="metric-card highlight">
+              <span class="metric-label">Supplement</span>
+              <span class="metric-value">${suppHours}h</span>
+            </div>
+            <div class="metric-card sun">
+              <span class="metric-label">Natural Sun</span>
+              <span class="metric-value">${daylightHours}h</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Target</span>
+              <span class="metric-value">${targetHours}h</span>
+            </div>
           </div>
-          <div class="metric-card sun">
-            <span class="metric-label">Natural Sun</span>
-            <span class="metric-value">${daylightHours}h</span>
-          </div>
-          <div class="metric-card">
-            <span class="metric-label">Target</span>
-            <span class="metric-value">${targetHours}h</span>
-          </div>
-        </div>
 
-        <!-- Expand / Advanced Button -->
-        <button class="expand-btn ${this._isExpanded ? 'expanded' : ''}" id="expand-btn">
-          <span>${this._isExpanded ? "Hide Advanced Settings" : "Configure Photoperiod & Seasonal Chart"}</span>
-          <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" fill="currentColor"/></svg>
-        </button>
-
-        <!-- Advanced Expanded Panel -->
-        ${this._isExpanded ? `
           <div class="advanced-panel">
-            <!-- Target Photoperiod Slider -->
             <div class="control-group">
               <div class="control-label-row">
                 <span>Target Photoperiod</span>
@@ -1002,7 +1145,6 @@ class AdaptiveGrowthLightCard extends HTMLElement {
               <input type="range" id="target-slider" min="6" max="18" step="0.5" value="${targetHours}">
             </div>
 
-            <!-- Lighting Mode Selector -->
             <div class="control-group">
               <div class="control-label-row">
                 <span>Lighting Routine</span>
@@ -1015,7 +1157,6 @@ class AdaptiveGrowthLightCard extends HTMLElement {
               </div>
             </div>
 
-            <!-- Morning Split (if both) -->
             ${lightingMode === 'both' ? `
               <div class="control-group">
                 <div class="control-label-row">
@@ -1026,7 +1167,6 @@ class AdaptiveGrowthLightCard extends HTMLElement {
               </div>
             ` : ""}
 
-            <!-- Daylight Overlap Knob -->
             <div class="control-group">
               <div class="control-label-row">
                 <span>Daylight Overlap Buffer</span>
@@ -1035,7 +1175,6 @@ class AdaptiveGrowthLightCard extends HTMLElement {
               <input type="range" id="overlap-slider" min="0" max="3" step="0.25" value="${daylightOverlap}">
             </div>
 
-            <!-- Sleep Protection Cut-Off Controls -->
             <div class="control-group">
               <div class="control-label-row">
                 <span>Sleep Protection Cut-Offs</span>
@@ -1053,19 +1192,166 @@ class AdaptiveGrowthLightCard extends HTMLElement {
               </div>
             </div>
 
-            <!-- Seasonal Chart -->
             ${this._renderSeasonalChart(seasonalMonths, targetHours)}
 
-            <!-- Manual light test override -->
             ${targetEntityId ? `
               <div class="target-override-row">
-                <span class="target-override-text">Controlled Light: <strong>${targetEntityId}</strong> ${targetState ? `(${targetState})` : ''}</span>
+                <span class="target-override-text">Target: <strong>${targetEntityId}</strong> ${targetState ? `(${targetState})` : ''}</span>
                 <button class="manual-btn" id="manual-light-btn">Toggle Light</button>
               </div>
             ` : ""}
           </div>
+        </ha-card>
+      ` : `
+        <!-- Compact Tile Mode (Default) -->
+        <ha-card class="compact-tile" id="card-tile">
+          <div class="tile-left">
+            <div class="tile-icon-wrap ${isEnabled ? 'active' : ''}">
+              <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93V18c0-.55-.45-1-1-1s-1 .45-1 1v1.93A8.001 8.001 0 014.07 13H6c.55 0 1-.45 1-1s-.45-1-1-1H4.07A8.001 8.001 0 0111 4.07V6c0 .55.45 1 1 1s1-.45 1-1V4.07A8.001 8.001 0 0119.93 11H18c-.55 0-1 .45-1 1s.45 1 1 1h1.93A8.001 8.001 0 0113 19.93z"/></svg>
+            </div>
+            <div class="tile-info">
+              <div class="tile-title">${friendlyName}</div>
+              <div class="tile-status-row">
+                <span class="tile-badge ${badge.class}">${badge.label}</span>
+                <span class="tile-next">${nextSessionText}</span>
+              </div>
+              <div class="tile-stats-row">
+                <span class="stat-sun">☀️ ${daylightHours}h</span>
+                <span>•</span>
+                <span class="stat-supp">🌱 ${suppHours}h</span>
+                <span>/</span>
+                <span class="stat-target">🎯 ${targetHours}h</span>
+              </div>
+            </div>
+          </div>
+          <div class="tile-right">
+            <label class="toggle-switch" id="master-toggle-wrap">
+              <input type="checkbox" id="master-toggle" ${isEnabled ? "checked" : ""}>
+              <span class="slider"></span>
+            </label>
+            <div class="tile-chevron">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
+              </svg>
+            </div>
+          </div>
+        </ha-card>
+
+        <!-- Interactive Modal Dialog -->
+        ${this._modalOpen ? `
+          <div class="modal-backdrop" id="modal-backdrop">
+            <div class="modal-dialog" id="modal-dialog">
+              <button class="modal-close-btn" id="modal-close-btn" title="Close">✕</button>
+
+              <div class="modal-header">
+                <div class="header-title-area">
+                  <div class="plant-icon-wrap ${isEnabled ? 'active' : ''}">
+                    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93V18c0-.55-.45-1-1-1s-1 .45-1 1v1.93A8.001 8.001 0 014.07 13H6c.55 0 1-.45 1-1s-.45-1-1-1H4.07A8.001 8.001 0 0111 4.07V6c0 .55.45 1 1 1s1-.45 1-1V4.07A8.001 8.001 0 0119.93 11H18c-.55 0-1 .45-1 1s.45 1 1 1h1.93A8.001 8.001 0 0113 19.93z"/></svg>
+                  </div>
+                  <div>
+                    <div class="card-title">${friendlyName}</div>
+                    <div class="card-subtitle">${lightingMode.toUpperCase()} ROUTINE</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="status-bar">
+                <div class="badge ${badge.class}">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="${badge.icon}"/></svg>
+                  <span>${badge.label}</span>
+                </div>
+                <div class="next-session-text">
+                  <span>⏰</span>
+                  <span>${nextSessionText}</span>
+                </div>
+              </div>
+
+              ${this._renderDayTimeline(statusSensor, earliestTurnOnSensor, earliestStartEntity, latestEndEntity, automationSwitch)}
+
+              <div class="metrics-grid">
+                <div class="metric-card highlight">
+                  <span class="metric-label">Supplement</span>
+                  <span class="metric-value">${suppHours}h</span>
+                </div>
+                <div class="metric-card sun">
+                  <span class="metric-label">Natural Sun</span>
+                  <span class="metric-value">${daylightHours}h</span>
+                </div>
+                <div class="metric-card">
+                  <span class="metric-label">Target</span>
+                  <span class="metric-value">${targetHours}h</span>
+                </div>
+              </div>
+
+              <div class="advanced-panel">
+                <div class="control-group">
+                  <div class="control-label-row">
+                    <span>Target Photoperiod</span>
+                    <span class="control-value">${targetHours} hours / day</span>
+                  </div>
+                  <input type="range" id="target-slider" min="6" max="18" step="0.5" value="${targetHours}">
+                </div>
+
+                <div class="control-group">
+                  <div class="control-label-row">
+                    <span>Lighting Routine</span>
+                    <span class="control-value">${lightingMode.toUpperCase()}</span>
+                  </div>
+                  <div class="mode-btn-group">
+                    <button class="mode-btn ${lightingMode === 'morning' ? 'active' : ''}" data-mode="morning">Morning</button>
+                    <button class="mode-btn ${lightingMode === 'evening' ? 'active' : ''}" data-mode="evening">Evening</button>
+                    <button class="mode-btn ${lightingMode === 'both' ? 'active' : ''}" data-mode="both">Both (Split)</button>
+                  </div>
+                </div>
+
+                ${lightingMode === 'both' ? `
+                  <div class="control-group">
+                    <div class="control-label-row">
+                      <span>Morning / Evening Ratio</span>
+                      <span class="control-value">${morningSplit}% Morning / ${100 - morningSplit}% Evening</span>
+                    </div>
+                    <input type="range" id="split-slider" min="0" max="100" step="5" value="${morningSplit}">
+                  </div>
+                ` : ""}
+
+                <div class="control-group">
+                  <div class="control-label-row">
+                    <span>Daylight Overlap Buffer</span>
+                    <span class="control-value">${daylightOverlap} hours</span>
+                  </div>
+                  <input type="range" id="overlap-slider" min="0" max="3" step="0.25" value="${daylightOverlap}">
+                </div>
+
+                <div class="control-group">
+                  <div class="control-label-row">
+                    <span>Sleep Protection Cut-Offs</span>
+                    <span class="control-value">${(earliestStartVal || latestEndVal) ? `${earliestStartVal || "No limit"} - ${latestEndVal || "No limit"}` : "None"}</span>
+                  </div>
+                  <div class="cutoff-row">
+                    <div class="cutoff-group">
+                      <label>Earliest Morning Start</label>
+                      <input type="time" id="earliest-start-input" value="${earliestStartVal}">
+                    </div>
+                    <div class="cutoff-group">
+                      <label>Latest Evening End</label>
+                      <input type="time" id="latest-end-input" value="${latestEndVal}">
+                    </div>
+                  </div>
+                </div>
+
+                ${this._renderSeasonalChart(seasonalMonths, targetHours)}
+
+                ${targetEntityId ? `
+                  <div class="target-override-row">
+                    <span class="target-override-text">Target: <strong>${targetEntityId}</strong> ${targetState ? `(${targetState})` : ''}</span>
+                    <button class="manual-btn" id="manual-light-btn">Toggle Light</button>
+                  </div>
+                ` : ""}
+              </div>
+            </div>
+          </div>
         ` : ""}
-      </ha-card>
+      `}
     `;
 
     this._bindEvents();
@@ -1074,19 +1360,41 @@ class AdaptiveGrowthLightCard extends HTMLElement {
   _bindEvents() {
     const root = this.shadowRoot;
 
+    // Tile click to open modal
+    const tile = root.getElementById("card-tile");
+    if (tile) {
+      tile.addEventListener("click", () => this._openModal());
+    }
+
+    // Modal close button
+    const closeBtn = root.getElementById("modal-close-btn");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", () => this._closeModal());
+    }
+
+    // Modal backdrop click
+    const backdrop = root.getElementById("modal-backdrop");
+    if (backdrop) {
+      backdrop.addEventListener("click", (e) => {
+        if (e.target.id === "modal-backdrop") {
+          this._closeModal();
+        }
+      });
+    }
+
+    // Stop propagation on master toggle click so it doesn't open modal
+    const toggleWrap = root.getElementById("master-toggle-wrap");
+    if (toggleWrap) {
+      toggleWrap.addEventListener("click", (e) => e.stopPropagation());
+    }
+
     // Toggle automation
     const toggle = root.getElementById("master-toggle");
     if (toggle) {
       toggle.addEventListener("change", (e) => this._toggleAutomation(e));
     }
 
-    // Expand button
-    const expandBtn = root.getElementById("expand-btn");
-    if (expandBtn) {
-      expandBtn.addEventListener("click", () => this._toggleExpand());
-    }
-
-    // Advanced controls
+    // Interactive sliders and inputs
     const targetSlider = root.getElementById("target-slider");
     if (targetSlider) {
       targetSlider.addEventListener("change", (e) => this._setPhotoperiod(e));
@@ -1127,7 +1435,7 @@ class AdaptiveGrowthLightCard extends HTMLElement {
   }
 
   getCardSize() {
-    return this._isExpanded ? 6 : 3;
+    return this._config.layout === "expanded" ? 6 : 1;
   }
 
   static getConfigElement() {
@@ -1135,7 +1443,7 @@ class AdaptiveGrowthLightCard extends HTMLElement {
   }
 
   static getStubConfig(hass) {
-    if (!hass || !hass.states) return { entity: "" };
+    if (!hass || !hass.states) return { entity: "", layout: "compact" };
     const candidates = Object.keys(hass.states).filter((eid) => {
       if (!eid.startsWith("switch.")) return false;
       const s = hass.states[eid];
@@ -1148,6 +1456,7 @@ class AdaptiveGrowthLightCard extends HTMLElement {
     });
     return {
       entity: candidates.length > 0 ? candidates[0] : "",
+      layout: "compact",
     };
   }
 }
@@ -1161,7 +1470,7 @@ class AdaptiveGrowthLightCardEditor extends HTMLElement {
   }
 
   setConfig(config) {
-    this._config = { ...config };
+    this._config = { layout: "compact", ...config };
     this._render();
   }
 
@@ -1262,11 +1571,15 @@ class AdaptiveGrowthLightCardEditor extends HTMLElement {
       this._form.computeLabel = (schema) => {
         if (schema.name === "entity") return "Adaptive Light Entity (Automation Switch)";
         if (schema.name === "name") return "Card Title (Optional)";
+        if (schema.name === "layout") return "Display Mode";
         return schema.name;
       };
       this._form.computeHelper = (schema) => {
         if (schema.name === "entity") {
           return "Select the Adaptive Growth Light entity to monitor and control.";
+        }
+        if (schema.name === "layout") {
+          return "Compact tile fits in 1-row dashboard grids and opens detailed modal on tap.";
         }
         return "";
       };
@@ -1328,6 +1641,17 @@ class AdaptiveGrowthLightCardEditor extends HTMLElement {
       {
         name: "name",
         selector: { text: {} },
+      },
+      {
+        name: "layout",
+        selector: {
+          select: {
+            options: [
+              { value: "compact", label: "Compact Tile (Opens Modal on Tap)" },
+              { value: "expanded", label: "Permanently Expanded (Full Details)" },
+            ],
+          },
+        },
       },
     ];
 
