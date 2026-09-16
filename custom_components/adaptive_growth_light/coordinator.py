@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Callable
 import zoneinfo
 
@@ -53,13 +55,16 @@ class AdaptiveGrowthLightCoordinator:
         self.daylight_overlap: float = float(
             data.get(CONF_DAYLIGHT_OVERLAP, DEFAULT_DAYLIGHT_OVERLAP)
         )
-        self.earliest_start = parse_time_helper(
-            data.get(CONF_EARLIEST_START, DEFAULT_EARLIEST_START)
-        )
-        self.latest_end = parse_time_helper(
-            data.get(CONF_LATEST_END, DEFAULT_LATEST_END)
-        )
+        self.earliest_start = parse_time_helper(data.get(CONF_EARLIEST_START))
+        self.latest_end = parse_time_helper(data.get(CONF_LATEST_END))
         self.is_enabled: bool = DEFAULT_ENABLED
+
+        manifest_path = Path(__file__).parent / "manifest.json"
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                self.sw_version: str = json.load(f).get("version", "1.1.1")
+        except Exception:
+            self.sw_version = "1.1.1"
 
         # Track if light was turned on by this automation
         self._turned_on_by_automation: bool = False

@@ -61,14 +61,24 @@ async def test_full_integration_setup_and_unload(hass: HomeAssistant) -> None:
     assert target_number is not None
     assert float(target_number.state) == 14.0
 
-    # Verify new time cut-off entities
+    # Verify new time cut-off entities (default to unknown when no cut-off set)
     earliest_time = hass.states.get("time.bathroom_grow_light_earliest_morning_start")
     assert earliest_time is not None
-    assert earliest_time.state == "06:30:00"
+    assert earliest_time.state == "unknown"
 
     latest_time = hass.states.get("time.bathroom_grow_light_latest_evening_end")
     assert latest_time is not None
-    assert latest_time.state == "22:00:00"
+    assert latest_time.state == "unknown"
+
+    # Verify setting a cut-off time dynamically updates the entity
+    await hass.services.async_call(
+        "time",
+        "set_value",
+        {"entity_id": "time.bathroom_grow_light_earliest_morning_start", "time": "06:30:00"},
+        blocking=True,
+    )
+    earliest_time = hass.states.get("time.bathroom_grow_light_earliest_morning_start")
+    assert earliest_time.state == "06:30:00"
 
     # Verify earliest turn on sensor
     earliest_turn_on = hass.states.get("sensor.bathroom_grow_light_earliest_turn_on_of_year")

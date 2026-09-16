@@ -9,25 +9,29 @@
           "target_entity": "Plant Light / Switch Entity",
           "target_photoperiod": "Target Daily Photoperiod (hours)",
           "lighting_mode": "Lighting Routine Mode",
-          "morning_split": "Morning Split Percentage (for 'Both' mode)",
           "daylight_overlap": "Daylight Overlap Buffer (hours)",
-          "earliest_start": "Earliest Morning Start (Cut-Off)",
-          "latest_end": "Latest Evening End (Cut-Off)"
+          "earliest_start": "Earliest Morning Start (Cut-Off, optional)",
+          "latest_end": "Latest Evening End (Cut-Off, optional)"
         },
         "data_description": {
           "name": "Leave blank to automatically name after the selected entity (e.g. 'Ficus Adaptive Light').",
-          "earliest_start": "Do not turn on lights before this time. Displaced hours are automatically shifted to the evening session.",
-          "latest_end": "Do not keep lights on past this time in the evening."
+          "earliest_start": "Leave empty for no morning limit. When set, lighting before this time is prevented and moved to the evening.",
+          "latest_end": "Leave empty for no evening limit. When set, lighting after this time is prevented."
+        }
+      },
+      "split": {
+        "title": "Morning / Evening Split Ratio",
+        "description": "Configure how supplemental lighting hours are divided between morning (before sunrise) and evening (after sunset).",
+        "data": {
+          "morning_split": "Morning Split Percentage"
         }
       },
       "preview": {
         "title": "Seasonal Lighting Preview",
-        "description": "Review how your light will adapt across the seasons for your location ({target_hours}h target photoperiod):\n\n{preview_text}\n\nClick **Submit** to finalize setup.",
-        "data": {
-          "name": "Device Name",
-          "target_photoperiod": "Target Daily Photoperiod (hours)",
-          "earliest_start": "Earliest Morning Start",
-          "latest_end": "Latest Evening End"
+        "description": "Review how your light will adapt across the seasons for your location ({target_hours}h target photoperiod):\n\n{preview_text}",
+        "menu_options": {
+          "confirm": "Save and Enable Lighting",
+          "back": "⬅ Back to Adjust Settings"
         }
       }
     }
@@ -44,22 +48,27 @@
           "lighting_mode": "Lighting Routine Mode",
           "morning_split": "Morning Split Percentage (for 'Both' mode)",
           "daylight_overlap": "Daylight Overlap Buffer (hours)",
-          "earliest_start": "Earliest Morning Start (Cut-Off)",
-          "latest_end": "Latest Evening End (Cut-Off)"
+          "earliest_start": "Earliest Morning Start (Cut-Off, optional)",
+          "latest_end": "Latest Evening End (Cut-Off, optional)"
         },
         "data_description": {
-          "earliest_start": "Do not turn on lights before this time. Displaced hours are automatically shifted to the evening session.",
-          "latest_end": "Do not keep lights on past this time in the evening."
+          "earliest_start": "Leave empty for no morning limit. When set, lighting before this time is prevented and moved to the evening.",
+          "latest_end": "Leave empty for no evening limit. When set, lighting after this time is prevented."
+        }
+      },
+      "split": {
+        "title": "Morning / Evening Split Ratio",
+        "description": "Configure how supplemental lighting hours are divided between morning (before sunrise) and evening (after sunset).",
+        "data": {
+          "morning_split": "Morning Split Percentage"
         }
       },
       "preview": {
         "title": "Seasonal Lighting Preview",
-        "description": "Review your updated seasonal schedule ({target_hours}h target photoperiod):\n\n{preview_text}\n\nClick **Submit** to save changes.",
-        "data": {
-          "name": "Device Name",
-          "target_photoperiod": "Target Daily Photoperiod (hours)",
-          "earliest_start": "Earliest Morning Start",
-          "latest_end": "Latest Evening End"
+        "description": "Review your updated seasonal schedule ({target_hours}h target photoperiod):\n\n{preview_text}",
+        "menu_options": {
+          "confirm": "Save Changes",
+          "back": "⬅ Back to Adjust Settings"
         }
       }
     }

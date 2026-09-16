@@ -4,7 +4,7 @@
  * Version: 1.0.0
  */
 
-const CARD_VERSION = "1.1.0";
+const CARD_VERSION = "1.1.1";
 
 console.info(
   `%c ADAPTIVE-GROWTH-LIGHT-CARD %c v${CARD_VERSION} `,
@@ -181,6 +181,8 @@ class AdaptiveGrowthLightCard extends HTMLElement {
   _setMode(mode) {
     const { lightingModeSelect } = this._findCompanionEntities();
     if (lightingModeSelect) {
+      lightingModeSelect.state = mode;
+      this.render();
       this._hass.callService("select", "select_option", {
         entity_id: lightingModeSelect.entity_id,
         option: mode,
@@ -337,8 +339,10 @@ class AdaptiveGrowthLightCard extends HTMLElement {
     const mornStartH = parseTimeStr(mornStartStr);
     const eveStartH = parseTimeStr(eveStartStr);
 
-    const earliestCutoffH = parseTimeStr(earliestStartEntity?.state || "06:30:00");
-    const latestCutoffH = parseTimeStr(latestEndEntity?.state || "22:00:00");
+    const hasValidEarliest = earliestStartEntity && earliestStartEntity.state && earliestStartEntity.state !== "unknown" && earliestStartEntity.state !== "unavailable";
+    const hasValidLatest = latestEndEntity && latestEndEntity.state && latestEndEntity.state !== "unknown" && latestEndEntity.state !== "unavailable";
+    const earliestCutoffH = hasValidEarliest ? parseTimeStr(earliestStartEntity.state) : null;
+    const latestCutoffH = hasValidLatest ? parseTimeStr(latestEndEntity.state) : null;
 
     const now = new Date();
     const nowH = now.getHours() + now.getMinutes() / 60.0;
@@ -452,8 +456,10 @@ class AdaptiveGrowthLightCard extends HTMLElement {
     const morningSplit = morningSplitNumber ? parseFloat(morningSplitNumber.state) || 50.0 : 50.0;
     const daylightOverlap = daylightOverlapNumber ? parseFloat(daylightOverlapNumber.state) || 1.0 : 1.0;
     const lightingMode = lightingModeSelect ? lightingModeSelect.state : "both";
-    const earliestStartVal = earliestStartEntity?.state ? earliestStartEntity.state.substring(0, 5) : "06:30";
-    const latestEndVal = latestEndEntity?.state ? latestEndEntity.state.substring(0, 5) : "22:00";
+    const hasEarliestStart = earliestStartEntity && earliestStartEntity.state && earliestStartEntity.state !== "unknown" && earliestStartEntity.state !== "unavailable";
+    const earliestStartVal = hasEarliestStart ? earliestStartEntity.state.substring(0, 5) : "";
+    const hasLatestEnd = latestEndEntity && latestEndEntity.state && latestEndEntity.state !== "unknown" && latestEndEntity.state !== "unavailable";
+    const latestEndVal = hasLatestEnd ? latestEndEntity.state.substring(0, 5) : "";
 
     const seasonalMonths = seasonalProfileSensor?.attributes?.months || [];
     const targetEntityId = automationSwitch?.attributes?.target_entity || "";
@@ -1033,7 +1039,7 @@ class AdaptiveGrowthLightCard extends HTMLElement {
             <div class="control-group">
               <div class="control-label-row">
                 <span>Sleep Protection Cut-Offs</span>
-                <span class="control-value">${earliestStartVal} - ${latestEndVal}</span>
+                <span class="control-value">${(earliestStartVal || latestEndVal) ? `${earliestStartVal || "No limit"} - ${latestEndVal || "No limit"}` : "None"}</span>
               </div>
               <div class="cutoff-row">
                 <div class="cutoff-group">

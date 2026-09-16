@@ -52,7 +52,7 @@ class AdaptiveGrowthLightBaseTime(TimeEntity):
             name=self.coordinator.name,
             manufacturer="Adaptive Growth Light",
             model="Photoperiod Controller",
-            sw_version="1.1.0",
+            sw_version=self.coordinator.sw_version,
         )
 
     async def async_added_to_hass(self) -> None:

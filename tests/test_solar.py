@@ -324,3 +324,45 @@ def test_svg_and_table_generation(warsaw_calculator: SolarCalculator):
     assert "Earliest Annual Turn-On" in preview
     assert "Sleep Protection Active" in preview
 
+
+def test_annual_earliest_turn_on_and_preview_no_cutoffs(warsaw_calculator: SolarCalculator):
+    """Verify that omitting cut-offs does not clamp and produces no sleep protection warnings."""
+    earliest_info = warsaw_calculator.get_annual_earliest_turn_on(
+        target_hours=14.0,
+        mode="both",
+        morning_split_pct=50.0,
+        overlap_hours=1.0,
+        earliest_start=None,
+        latest_end=None,
+        year=2026,
+    )
+    assert earliest_info["is_clamped"] is False
+    assert earliest_info["cutoff_time"] is None
+    assert earliest_info["effective_time"] == earliest_info["unclamped_time"]
+
+    timeline = warsaw_calculator.get_precision_ascii_timeline(
+        target_hours=14.0,
+        mode="both",
+        morning_split_pct=50.0,
+        overlap_hours=1.0,
+        earliest_start=None,
+        latest_end=None,
+        year=2026,
+    )
+    data_rows = [l.split("│")[1] for l in timeline.strip().split("\n") if "│" in l and not l.strip().startswith("00")]
+    for row in data_rows:
+        assert "x" not in row
+
+    preview = warsaw_calculator.get_seasonal_preview_text(
+        target_hours=14.0,
+        mode="both",
+        morning_split_pct=50.0,
+        overlap_hours=1.0,
+        earliest_start=None,
+        latest_end=None,
+        ref_year=2026,
+    )
+    assert "Sleep Protection Active" not in preview
+    assert "held back by morning cut-off" not in preview
+
+

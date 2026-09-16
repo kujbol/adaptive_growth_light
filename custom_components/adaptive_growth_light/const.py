@@ -24,8 +24,8 @@ DEFAULT_TARGET_PHOTOPERIOD = 14.0  # hours
 DEFAULT_LIGHTING_MODE = MODE_BOTH
 DEFAULT_MORNING_SPLIT = 50.0  # percentage in morning
 DEFAULT_DAYLIGHT_OVERLAP = 1.0  # hours overlap with daylight
-DEFAULT_EARLIEST_START = "06:30:00"  # earliest allowed morning turn-on
-DEFAULT_LATEST_END = "22:00:00"  # latest allowed evening turn-off
+DEFAULT_EARLIEST_START: str | None = None  # None by default (no cut-off restriction)
+DEFAULT_LATEST_END: str | None = None  # None by default (no cut-off restriction)
 DEFAULT_ENABLED = True
 
 # Control boundaries

@@ -8,12 +8,17 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.adaptive_growth_light.config_flow import get_config_schema
 from custom_components.adaptive_growth_light.const import (
     CONF_DAYLIGHT_OVERLAP,
+    CONF_EARLIEST_START,
+    CONF_LATEST_END,
     CONF_LIGHTING_MODE,
     CONF_MORNING_SPLIT,
     CONF_NAME,
     CONF_TARGET_ENTITY,
     CONF_TARGET_PHOTOPERIOD,
     DOMAIN,
+    MODE_BOTH,
+    MODE_EVENING,
+    MODE_MORNING,
 )
 
 
@@ -22,8 +27,8 @@ def test_config_schema_defaults():
     assert schema is not None
 
 
-async def test_config_flow_user_step_creates_entry(hass: HomeAssistant) -> None:
-    """Test user step of config flow leading to seasonal preview and entry creation."""
+async def test_config_flow_morning_mode_skips_split(hass: HomeAssistant) -> None:
+    """Test that selecting morning mode skips the split slider and goes straight to preview."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": "user"}
     )
@@ -34,39 +39,40 @@ async def test_config_flow_user_step_creates_entry(hass: HomeAssistant) -> None:
         CONF_NAME: "Kitchen Basil",
         CONF_TARGET_ENTITY: "switch.kitchen_light",
         CONF_TARGET_PHOTOPERIOD: 15.0,
-        CONF_LIGHTING_MODE: "morning",
-        CONF_MORNING_SPLIT: 50.0,
+        CONF_LIGHTING_MODE: MODE_MORNING,
         CONF_DAYLIGHT_OVERLAP: 1.0,
     }
 
-    # Step 1: Submit configuration -> shows seasonal preview step!
+    # Step 1: Submit configuration -> shows seasonal preview MENU (no split step shown)
     result_preview = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         user_input,
     )
-    assert result_preview["type"] is FlowResultType.FORM
+    assert result_preview["type"] is FlowResultType.MENU
     assert result_preview["step_id"] == "preview"
+    assert result_preview["menu_options"] == ["confirm", "back"]
     assert "preview_text" in result_preview["description_placeholders"]
 
     # Step 2: Confirm preview -> creates entry!
     result2 = await hass.config_entries.flow.async_configure(
         result_preview["flow_id"],
-        {},
+        {"next_step_id": "confirm"},
     )
     assert result2["type"] is FlowResultType.CREATE_ENTRY
     assert result2["title"] == "Kitchen Basil"
     assert result2["data"][CONF_NAME] == "Kitchen Basil"
     assert result2["data"][CONF_TARGET_ENTITY] == "switch.kitchen_light"
     assert result2["data"][CONF_TARGET_PHOTOPERIOD] == 15.0
-    assert result2["data"][CONF_LIGHTING_MODE] == "morning"
-    assert result2["data"][CONF_MORNING_SPLIT] == 50.0
+    assert result2["data"][CONF_LIGHTING_MODE] == MODE_MORNING
+    assert result2["data"][CONF_MORNING_SPLIT] == 100.0
     assert result2["data"][CONF_DAYLIGHT_OVERLAP] == 1.0
-    assert result2["data"]["earliest_start"] == "06:30:00"
-    assert result2["data"]["latest_end"] == "22:00:00"
+    # Cut-offs default to None when not specified
+    assert result2["data"][CONF_EARLIEST_START] is None
+    assert result2["data"][CONF_LATEST_END] is None
 
 
-async def test_config_flow_custom_cutoffs_in_preview(hass: HomeAssistant) -> None:
-    """Test modifying cut-offs and photoperiod during preview step."""
+async def test_config_flow_both_mode_shows_split_step(hass: HomeAssistant) -> None:
+    """Test that selecting both mode shows the split slider before preview."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": "user"}
     )
@@ -74,37 +80,140 @@ async def test_config_flow_custom_cutoffs_in_preview(hass: HomeAssistant) -> Non
         CONF_NAME: "Bedroom Ficus",
         CONF_TARGET_ENTITY: "light.bedroom_grow_light",
         CONF_TARGET_PHOTOPERIOD: 14.0,
-        CONF_LIGHTING_MODE: "both",
-        CONF_MORNING_SPLIT: 50.0,
+        CONF_LIGHTING_MODE: MODE_BOTH,
         CONF_DAYLIGHT_OVERLAP: 1.0,
-        "earliest_start": "06:30:00",
-        "latest_end": "22:00:00",
+    }
+
+    # Step 1: Submit configuration -> shows split step
+    result_split = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input,
+    )
+    assert result_split["type"] is FlowResultType.FORM
+    assert result_split["step_id"] == "split"
+
+    # Step 2: Configure split percentage -> shows preview menu
+    result_preview = await hass.config_entries.flow.async_configure(
+        result_split["flow_id"],
+        {CONF_MORNING_SPLIT: 40.0},
+    )
+    assert result_preview["type"] is FlowResultType.MENU
+    assert result_preview["step_id"] == "preview"
+
+    # Step 3: Confirm -> creates entry with configured split
+    result_create = await hass.config_entries.flow.async_configure(
+        result_preview["flow_id"],
+        {"next_step_id": "confirm"},
+    )
+    assert result_create["type"] is FlowResultType.CREATE_ENTRY
+    assert result_create["data"][CONF_MORNING_SPLIT] == 40.0
+
+
+async def test_config_flow_evening_mode_auto_split(hass: HomeAssistant) -> None:
+    """Test that evening mode sets split to 0.0 and skips split step."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    user_input = {
+        CONF_NAME: "Evening Fern",
+        CONF_TARGET_ENTITY: "light.fern",
+        CONF_TARGET_PHOTOPERIOD: 12.0,
+        CONF_LIGHTING_MODE: MODE_EVENING,
+        CONF_DAYLIGHT_OVERLAP: 0.5,
     }
     result_preview = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         user_input,
     )
-    assert result_preview["type"] is FlowResultType.FORM
+    assert result_preview["type"] is FlowResultType.MENU
     assert result_preview["step_id"] == "preview"
 
-    # User tweaks earliest_start to 07:00:00 in the preview step before confirming!
-    result2 = await hass.config_entries.flow.async_configure(
+    result_create = await hass.config_entries.flow.async_configure(
         result_preview["flow_id"],
-        {
-            CONF_NAME: "Bedroom Ficus",
-            CONF_TARGET_PHOTOPERIOD: 13.5,
-            "earliest_start": "07:00:00",
-            "latest_end": "21:30:00",
-        },
+        {"next_step_id": "confirm"},
     )
-    assert result2["type"] is FlowResultType.CREATE_ENTRY
-    assert result2["data"]["earliest_start"] == "07:00:00"
-    assert result2["data"]["latest_end"] == "21:30:00"
-    assert result2["data"][CONF_TARGET_PHOTOPERIOD] == 13.5
+    assert result_create["type"] is FlowResultType.CREATE_ENTRY
+    assert result_create["data"][CONF_MORNING_SPLIT] == 0.0
+
+
+async def test_config_flow_back_button_from_preview(hass: HomeAssistant) -> None:
+    """Test navigating back from preview to adjust settings without losing input."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    user_input = {
+        CONF_NAME: "Office Monster",
+        CONF_TARGET_ENTITY: "switch.office_lamp",
+        CONF_TARGET_PHOTOPERIOD: 13.0,
+        CONF_LIGHTING_MODE: MODE_MORNING,
+        CONF_DAYLIGHT_OVERLAP: 1.0,
+    }
+    result_preview = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input,
+    )
+    assert result_preview["type"] is FlowResultType.MENU
+    assert result_preview["step_id"] == "preview"
+
+    # User clicks 'back' to change settings
+    result_back = await hass.config_entries.flow.async_configure(
+        result_preview["flow_id"],
+        {"next_step_id": "back"},
+    )
+    assert result_back["type"] is FlowResultType.FORM
+    assert result_back["step_id"] == "user"
+
+    # User changes target photoperiod to 16.0
+    updated_input = {
+        **user_input,
+        CONF_TARGET_PHOTOPERIOD: 16.0,
+    }
+    result_preview2 = await hass.config_entries.flow.async_configure(
+        result_back["flow_id"],
+        updated_input,
+    )
+    assert result_preview2["type"] is FlowResultType.MENU
+
+    # Confirm
+    result_create = await hass.config_entries.flow.async_configure(
+        result_preview2["flow_id"],
+        {"next_step_id": "confirm"},
+    )
+    assert result_create["type"] is FlowResultType.CREATE_ENTRY
+    assert result_create["data"][CONF_TARGET_PHOTOPERIOD] == 16.0
+
+
+async def test_config_flow_custom_cutoffs(hass: HomeAssistant) -> None:
+    """Test specifying custom cut-offs in config flow."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    user_input = {
+        CONF_NAME: "Bedroom Ficus",
+        CONF_TARGET_ENTITY: "light.bedroom_grow_light",
+        CONF_TARGET_PHOTOPERIOD: 14.0,
+        CONF_LIGHTING_MODE: MODE_EVENING,
+        CONF_DAYLIGHT_OVERLAP: 1.0,
+        CONF_EARLIEST_START: "07:00:00",
+        CONF_LATEST_END: "21:30:00",
+    }
+    result_preview = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input,
+    )
+    assert result_preview["type"] is FlowResultType.MENU
+
+    result_create = await hass.config_entries.flow.async_configure(
+        result_preview["flow_id"],
+        {"next_step_id": "confirm"},
+    )
+    assert result_create["type"] is FlowResultType.CREATE_ENTRY
+    assert result_create["data"][CONF_EARLIEST_START] == "07:00:00"
+    assert result_create["data"][CONF_LATEST_END] == "21:30:00"
 
 
 async def test_options_flow(hass: HomeAssistant) -> None:
-    """Test options flow to update settings with seasonal preview."""
+    """Test options flow to update settings with seasonal preview and confirm."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Balcony Mint",
@@ -112,9 +221,11 @@ async def test_options_flow(hass: HomeAssistant) -> None:
             CONF_NAME: "Balcony Mint",
             CONF_TARGET_ENTITY: "switch.mint_light",
             CONF_TARGET_PHOTOPERIOD: 12.0,
-            CONF_LIGHTING_MODE: "both",
+            CONF_LIGHTING_MODE: MODE_BOTH,
             CONF_MORNING_SPLIT: 50.0,
             CONF_DAYLIGHT_OVERLAP: 1.0,
+            CONF_EARLIEST_START: None,
+            CONF_LATEST_END: None,
         },
     )
     entry.add_to_hass(hass)
@@ -123,35 +234,71 @@ async def test_options_flow(hass: HomeAssistant) -> None:
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "init"
 
-    # Step 1: Submit options -> shows seasonal preview step
+    # Step 1: Submit options -> mode is evening, so goes to preview menu
     result_preview = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
             CONF_NAME: "Balcony Mint Updated",
             CONF_TARGET_ENTITY: "switch.mint_light_new",
             CONF_TARGET_PHOTOPERIOD: 14.5,
-            CONF_LIGHTING_MODE: "evening",
-            CONF_MORNING_SPLIT: 50.0,
+            CONF_LIGHTING_MODE: MODE_EVENING,
             CONF_DAYLIGHT_OVERLAP: 1.5,
         },
     )
-    assert result_preview["type"] is FlowResultType.FORM
+    assert result_preview["type"] is FlowResultType.MENU
     assert result_preview["step_id"] == "preview"
 
     # Step 2: Confirm preview -> updates entry
     result2 = await hass.config_entries.options.async_configure(
         result_preview["flow_id"],
-        {},
+        {"next_step_id": "confirm"},
     )
     assert result2["type"] is FlowResultType.CREATE_ENTRY
     assert entry.data[CONF_TARGET_PHOTOPERIOD] == 14.5
-    assert entry.data[CONF_LIGHTING_MODE] == "evening"
+    assert entry.data[CONF_LIGHTING_MODE] == MODE_EVENING
     assert entry.data[CONF_DAYLIGHT_OVERLAP] == 1.5
+
+
+async def test_options_flow_back_navigation(hass: HomeAssistant) -> None:
+    """Test navigating back in options flow."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Balcony Mint",
+        data={
+            CONF_NAME: "Balcony Mint",
+            CONF_TARGET_ENTITY: "switch.mint_light",
+            CONF_TARGET_PHOTOPERIOD: 12.0,
+            CONF_LIGHTING_MODE: MODE_MORNING,
+            CONF_MORNING_SPLIT: 100.0,
+            CONF_DAYLIGHT_OVERLAP: 1.0,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result_preview = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_NAME: "Balcony Mint",
+            CONF_TARGET_ENTITY: "switch.mint_light",
+            CONF_TARGET_PHOTOPERIOD: 14.0,
+            CONF_LIGHTING_MODE: MODE_MORNING,
+            CONF_DAYLIGHT_OVERLAP: 1.0,
+        },
+    )
+    assert result_preview["type"] is FlowResultType.MENU
+
+    # Click back
+    result_back = await hass.config_entries.options.async_configure(
+        result_preview["flow_id"],
+        {"next_step_id": "back"},
+    )
+    assert result_back["type"] is FlowResultType.FORM
+    assert result_back["step_id"] == "init"
 
 
 async def test_config_flow_auto_name_from_entity(hass: HomeAssistant) -> None:
     """Test that omitting name automatically derives a clean default name from target entity."""
-    # Pre-register state with friendly name
     hass.states.async_set(
         "light.living_room_ficus", "off", {"friendly_name": "Living Room Ficus"}
     )
@@ -165,8 +312,7 @@ async def test_config_flow_auto_name_from_entity(hass: HomeAssistant) -> None:
     user_input = {
         CONF_TARGET_ENTITY: "light.living_room_ficus",
         CONF_TARGET_PHOTOPERIOD: 14.0,
-        CONF_LIGHTING_MODE: "both",
-        CONF_MORNING_SPLIT: 50.0,
+        CONF_LIGHTING_MODE: MODE_EVENING,
         CONF_DAYLIGHT_OVERLAP: 1.0,
     }
 
@@ -174,13 +320,13 @@ async def test_config_flow_auto_name_from_entity(hass: HomeAssistant) -> None:
         result["flow_id"],
         user_input,
     )
-    assert result_preview["type"] is FlowResultType.FORM
+    assert result_preview["type"] is FlowResultType.MENU
     assert result_preview["step_id"] == "preview"
 
-    # Confirm preview without editing name
+    # Confirm preview
     result_create = await hass.config_entries.flow.async_configure(
         result_preview["flow_id"],
-        {},
+        {"next_step_id": "confirm"},
     )
     assert result_create["type"] is FlowResultType.CREATE_ENTRY
     assert result_create["title"] == "Living Room Ficus Adaptive Light"
@@ -203,46 +349,13 @@ async def test_config_flow_auto_name_entity_ending_with_light(
         {
             CONF_TARGET_ENTITY: "light.kitchen_grow_light",
             CONF_TARGET_PHOTOPERIOD: 13.0,
-            CONF_LIGHTING_MODE: "evening",
-            CONF_MORNING_SPLIT: 50.0,
+            CONF_LIGHTING_MODE: MODE_EVENING,
             CONF_DAYLIGHT_OVERLAP: 0.5,
         },
     )
     result_create = await hass.config_entries.flow.async_configure(
         result_preview["flow_id"],
-        {},
+        {"next_step_id": "confirm"},
     )
     assert result_create["type"] is FlowResultType.CREATE_ENTRY
     assert result_create["title"] == "Kitchen Grow Adaptive Light"
-
-
-async def test_config_flow_preview_allows_overriding_auto_name(
-    hass: HomeAssistant,
-) -> None:
-    """Test that the user can override the automatically derived name during the preview step."""
-    hass.states.async_set(
-        "switch.shelf_plug", "off", {"friendly_name": "Shelf Plug"}
-    )
-
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": "user"}
-    )
-    result_preview = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        {
-            CONF_TARGET_ENTITY: "switch.shelf_plug",
-            CONF_TARGET_PHOTOPERIOD: 14.0,
-            CONF_LIGHTING_MODE: "morning",
-            CONF_MORNING_SPLIT: 50.0,
-            CONF_DAYLIGHT_OVERLAP: 1.0,
-        },
-    )
-    # In preview step, user changes name to "My Custom Herb Lamp"
-    result_create = await hass.config_entries.flow.async_configure(
-        result_preview["flow_id"],
-        {CONF_NAME: "My Custom Herb Lamp"},
-    )
-    assert result_create["type"] is FlowResultType.CREATE_ENTRY
-    assert result_create["title"] == "My Custom Herb Lamp"
-    assert result_create["data"][CONF_NAME] == "My Custom Herb Lamp"
-
