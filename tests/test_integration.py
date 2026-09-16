@@ -80,3 +80,43 @@ async def test_async_setup_with_http(hass: HomeAssistant) -> None:
     assert await async_setup(hass, {}) is True
     mock_http.async_register_static_paths.assert_awaited_once()
 
+
+def test_brand_assets_validity() -> None:
+    """Verify that all Home Assistant brand icons and logos exist with valid PNG format and dimensions."""
+    from pathlib import Path
+    from PIL import Image
+
+    root = Path(__file__).parent.parent
+    brand_dir = root / "custom_components" / "adaptive_growth_light" / "brand"
+    assert brand_dir.is_dir(), "brand/ directory must exist in custom component"
+
+    expected_assets = {
+        brand_dir / "icon.png": (256, 256),
+        brand_dir / "icon@2x.png": (512, 512),
+        brand_dir / "dark_icon.png": (256, 256),
+        brand_dir / "dark_icon@2x.png": (512, 512),
+        brand_dir / "logo.png": (512, 512),
+        brand_dir / "logo@2x.png": (1024, 1024),
+        brand_dir / "dark_logo.png": (512, 512),
+        brand_dir / "dark_logo@2x.png": (1024, 1024),
+        root / "custom_components" / "adaptive_growth_light" / "icon.png": (256, 256),
+        root / "custom_components" / "adaptive_growth_light" / "logo.png": (512, 512),
+        root / "images" / "logo.png": (1024, 1024),
+    }
+
+    png_magic_bytes = b"\x89PNG\r\n\x1a\n"
+
+    for path, (expected_w, expected_h) in expected_assets.items():
+        assert path.exists(), f"Asset missing: {path}"
+        assert path.stat().st_size > 0, f"Asset empty: {path}"
+
+        with open(path, "rb") as fp:
+            header = fp.read(8)
+            assert header == png_magic_bytes, f"File {path.name} is not a valid PNG!"
+
+        with Image.open(path) as img:
+            assert img.format == "PNG", f"{path.name} PIL format is not PNG"
+            assert img.size == (expected_w, expected_h), f"{path.name} size mismatch: got {img.size}, expected {(expected_w, expected_h)}"
+            assert img.mode == "RGBA", f"{path.name} must have RGBA alpha transparency channel"
+
+
