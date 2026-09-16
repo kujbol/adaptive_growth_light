@@ -22,15 +22,30 @@ PLATFORMS: list[Platform] = [
 ]
 
 
+try:
+    from homeassistant.components.http import StaticPathConfig
+except ImportError:
+    StaticPathConfig = None
+
+
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the integration and register frontend Lovelace card static path."""
     card_path = Path(__file__).parent / FRONTEND_DIR / "adaptive-growth-light-card.js"
     if hasattr(hass, "http") and hass.http and card_path.exists():
-        hass.http.register_static_path(
-            FRONTEND_URL,
-            str(card_path),
-            cache_headers=False,
-        )
+        if hasattr(hass.http, "async_register_static_paths") and StaticPathConfig:
+            await hass.http.async_register_static_paths([
+                StaticPathConfig(
+                    url_path=FRONTEND_URL,
+                    path=str(card_path),
+                    cache_headers=False,
+                )
+            ])
+        elif hasattr(hass.http, "register_static_path"):
+            hass.http.register_static_path(
+                FRONTEND_URL,
+                str(card_path),
+                cache_headers=False,
+            )
         _LOGGER.debug("Registered static path for Adaptive Growth Light Card: %s", FRONTEND_URL)
     return True
 

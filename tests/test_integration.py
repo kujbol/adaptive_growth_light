@@ -66,3 +66,17 @@ async def test_full_integration_setup_and_unload(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
 
     assert entry.entry_id not in hass.data[DOMAIN]
+
+
+async def test_async_setup_with_http(hass: HomeAssistant) -> None:
+    """Verify async_setup registers static path with modern async_register_static_paths."""
+    from unittest.mock import AsyncMock, MagicMock
+    from custom_components.adaptive_growth_light import async_setup
+
+    mock_http = MagicMock()
+    mock_http.async_register_static_paths = AsyncMock()
+    hass.http = mock_http
+
+    assert await async_setup(hass, {}) is True
+    mock_http.async_register_static_paths.assert_awaited_once()
+
