@@ -75,13 +75,33 @@ expanded_by_default: false
 
 ## ⚙️ How Photoperiod is Calculated
 
-1. **Natural Daylight**: Using astronomical equations from `astral` and your Home Assistant geographical coordinates:
-   $$T_{\text{natural}} = t_{\text{sunset}} - t_{\text{sunrise}}$$
-2. **Required Supplementary Light**:
-   $$T_{\text{supp}} = \max(0, T_{\text{target}} - T_{\text{natural}})$$
-3. **Session Windows with Overlap ($O$)**:
-   - **Morning**: Ends at $t_{\text{sunrise}} + O$, begins at $(t_{\text{sunrise}} + O) - T_{\text{morning}}$.
-   - **Evening**: Begins at $t_{\text{sunset}} - O$, ends at $(t_{\text{sunset}} - O) + T_{\text{evening}}$.
+The integration uses astronomical solar calculations (`astral`) based on your Home Assistant geographical coordinates.
+
+### 1. Natural Daylight Duration
+Calculated dynamically from today's exact solar times:
+```text
+Natural Daylight = Sunset - Sunrise
+```
+
+### 2. Required Supplementary Light
+Determines how many hours of artificial light your plants still need:
+```text
+Supplementary Light = Max(0, Target Photoperiod - Natural Daylight)
+```
+- **Summer**: If `Natural Daylight ≥ Target`, supplementary light is `0h` (grow light remains off).
+- **Winter**: If `Natural Daylight < Target`, the integration provides the exact missing difference.
+
+### 3. Lighting Schedule & Daylight Overlap Buffer
+The **Daylight Overlap** buffer (in hours) bridges the natural light transition:
+
+- **🌅 Morning Routine**:
+  - **Turns off at**: `Sunrise + Overlap` (e.g. 1 hour after sunrise)
+  - **Turns on at**: `(Sunrise + Overlap) - Morning Duration`
+- **🌇 Evening Routine**:
+  - **Turns on at**: `Sunset - Overlap` (e.g. 1 hour before sunset)
+  - **Turns off at**: `(Sunset - Overlap) + Evening Duration`
+- **⚖️ Both (Split Routine)**:
+  - Required supplementary time is divided between morning and evening according to the **Morning Split %** slider (e.g. 50% morning / 50% evening).
 
 ---
 
