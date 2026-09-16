@@ -5,17 +5,23 @@
         "title": "Konfiguracja Inteligentnego Doświetlania Roślin",
         "description": "Skonfiguruj adaptacyjne doświetlanie roślin w oparciu o naturalne światło słoneczne i docelowy fotoperiod.",
         "data": {
-          "name": "Nazwa",
+          "name": "Nazwa (opcjonalnie)",
           "target_entity": "Światło lub przełącznik doświetlania",
           "target_photoperiod": "Docelowy fotoperiod dzienny (godziny)",
           "lighting_mode": "Tryb doświetlania",
           "morning_split": "Udział poranny w trybie łączonym (%)",
           "daylight_overlap": "Bufor nakładania z dniem (godziny)"
+        },
+        "data_description": {
+          "name": "Pozostaw puste, aby nazwa została wygenerowana automatycznie na podstawie wybranego światła (np. 'Fikus Adaptive Light')."
         }
       },
       "preview": {
         "title": "Podgląd Doświetlania w Sezonach",
-        "description": "Zobacz, jak doświetlanie będzie adaptować się w ciągu roku dla Twojej lokalizacji (fotoperiod: {target_hours}h):\n\n{preview_text}\n\nKliknij **Zatwierdź**, aby zakończyć konfigurację."
+        "description": "Zobacz, jak doświetlanie będzie adaptować się w ciągu roku dla Twojej lokalizacji (fotoperiod: {target_hours}h):\n\n{preview_text}\n\nKliknij **Zatwierdź**, aby zakończyć konfigurację.",
+        "data": {
+          "name": "Nazwa urządzenia"
+        }
       }
     }
   },

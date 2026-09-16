@@ -6,8 +6,9 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_DAYLIGHT_OVERLAP,
@@ -33,30 +34,82 @@ from .const import (
     STEP_PHOTOPERIOD,
     STEP_SPLIT,
 )
-
-
-from homeassistant.util import dt as dt_util
-
 from .solar import SolarCalculator
+
+
+def generate_default_name_from_entity(hass: HomeAssistant, entity_id: str) -> str:
+    """Generate a clean default adaptive light name based on the selected entity."""
+    if not entity_id:
+        return DEFAULT_NAME
+
+    entity_name = ""
+    state = hass.states.get(entity_id)
+    if state and state.name:
+        entity_name = state.name
+    else:
+        try:
+            from homeassistant.helpers import entity_registry as er
+
+            ent_reg = er.async_get(hass)
+            entry = ent_reg.async_get(entity_id)
+            if entry:
+                entity_name = entry.name or entry.original_name or ""
+        except Exception:
+            pass
+
+    if not entity_name:
+        object_id = entity_id.split(".", 1)[-1]
+        entity_name = object_id.replace("_", " ").title()
+
+    clean = entity_name.strip()
+    if not clean:
+        return DEFAULT_NAME
+    if "adaptive" in clean.lower():
+        return clean
+    if clean.lower() == "light":
+        return "Adaptive Light"
+    if clean.lower().endswith(" light"):
+        base = clean[:-6].strip()
+        return f"{base} Adaptive Light"
+    return f"{clean} Adaptive Light"
 
 
 def get_config_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     """Generate the config schema with current or default values."""
     defaults = defaults or {}
-    return vol.Schema(
-        {
-            vol.Required(
-                CONF_NAME,
-                default=defaults.get(CONF_NAME, DEFAULT_NAME),
-            ): str,
+
+    schema_dict: dict[Any, Any] = {}
+
+    # Target entity selection
+    if defaults.get(CONF_TARGET_ENTITY):
+        schema_dict[
             vol.Required(
                 CONF_TARGET_ENTITY,
-                default=defaults.get(CONF_TARGET_ENTITY, ""),
-            ): selector.EntitySelector(
-                selector.EntitySelectorConfig(
-                    domain=["switch", "light"],
-                )
-            ),
+                default=defaults[CONF_TARGET_ENTITY],
+            )
+        ] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain=["switch", "light"])
+        )
+    else:
+        schema_dict[
+            vol.Required(CONF_TARGET_ENTITY)
+        ] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain=["switch", "light"])
+        )
+
+    # Name is optional: if left blank, it will be automatically derived from the target entity
+    if defaults.get(CONF_NAME):
+        schema_dict[
+            vol.Optional(
+                CONF_NAME,
+                default=defaults[CONF_NAME],
+            )
+        ] = selector.TextSelector()
+    else:
+        schema_dict[vol.Optional(CONF_NAME)] = selector.TextSelector()
+
+    schema_dict.update(
+        {
             vol.Required(
                 CONF_TARGET_PHOTOPERIOD,
                 default=float(defaults.get(CONF_TARGET_PHOTOPERIOD, DEFAULT_TARGET_PHOTOPERIOD)),
@@ -105,6 +158,7 @@ def get_config_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             ),
         }
     )
+    return vol.Schema(schema_dict)
 
 
 class AdaptiveGrowthLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -121,6 +175,14 @@ class AdaptiveGrowthLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.ConfigFlowResult:
         """Handle the initial step."""
         if user_input is not None:
+            # If user didn't specify a name, auto-derive it from the selected entity
+            custom_name = (user_input.get(CONF_NAME) or "").strip()
+            if not custom_name:
+                custom_name = generate_default_name_from_entity(
+                    self.hass, user_input.get(CONF_TARGET_ENTITY, "")
+                )
+            user_input[CONF_NAME] = custom_name
+
             self._config_data = user_input
             return await self.async_step_preview()
 
@@ -134,7 +196,13 @@ class AdaptiveGrowthLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.ConfigFlowResult:
         """Display seasonal daylight vs. supplementary light preview before creating entry."""
         if user_input is not None:
-            name = self._config_data.get(CONF_NAME, DEFAULT_NAME)
+            preview_name = (user_input.get(CONF_NAME) or "").strip()
+            if preview_name:
+                self._config_data[CONF_NAME] = preview_name
+            name = self._config_data.get(CONF_NAME) or generate_default_name_from_entity(
+                self.hass, self._config_data.get(CONF_TARGET_ENTITY, "")
+            )
+            self._config_data[CONF_NAME] = name
             return self.async_create_entry(title=name, data=self._config_data)
 
         calc = SolarCalculator(
@@ -150,9 +218,23 @@ class AdaptiveGrowthLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             overlap_hours=self._config_data[CONF_DAYLIGHT_OVERLAP],
         )
 
+        current_name = self._config_data.get(CONF_NAME) or generate_default_name_from_entity(
+            self.hass, self._config_data.get(CONF_TARGET_ENTITY, "")
+        )
+        self._config_data[CONF_NAME] = current_name
+
+        preview_schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_NAME,
+                    default=current_name,
+                ): selector.TextSelector(),
+            }
+        )
+
         return self.async_show_form(
             step_id="preview",
-            data_schema=vol.Schema({}),
+            data_schema=preview_schema,
             description_placeholders={
                 "preview_text": preview_text,
                 "target_hours": str(self._config_data[CONF_TARGET_PHOTOPERIOD]),
@@ -180,6 +262,12 @@ class AdaptiveGrowthLightOptionsFlowHandler(config_entries.OptionsFlow):
     ) -> config_entries.ConfigFlowResult:
         """Manage configuration options."""
         if user_input is not None:
+            custom_name = (user_input.get(CONF_NAME) or "").strip()
+            if not custom_name:
+                custom_name = generate_default_name_from_entity(
+                    self.hass, user_input.get(CONF_TARGET_ENTITY, "")
+                )
+            user_input[CONF_NAME] = custom_name
             self._options_data = user_input
             return await self.async_step_preview()
 
@@ -194,8 +282,16 @@ class AdaptiveGrowthLightOptionsFlowHandler(config_entries.OptionsFlow):
     ) -> config_entries.ConfigFlowResult:
         """Display seasonal preview before saving updated settings."""
         if user_input is not None:
+            preview_name = (user_input.get(CONF_NAME) or "").strip()
+            if preview_name:
+                self._options_data[CONF_NAME] = preview_name
+            name = self._options_data.get(CONF_NAME) or self.config_entry.title
+            self._options_data[CONF_NAME] = name
+
             self.hass.config_entries.async_update_entry(
-                self.config_entry, data={**self.config_entry.data, **self._options_data}
+                self.config_entry,
+                title=name,
+                data={**self.config_entry.data, **self._options_data},
             )
             return self.async_create_entry(title="", data=self._options_data)
 
@@ -212,12 +308,23 @@ class AdaptiveGrowthLightOptionsFlowHandler(config_entries.OptionsFlow):
             overlap_hours=self._options_data[CONF_DAYLIGHT_OVERLAP],
         )
 
+        current_name = self._options_data.get(CONF_NAME, self.config_entry.title)
+        preview_schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_NAME,
+                    default=current_name,
+                ): selector.TextSelector(),
+            }
+        )
+
         return self.async_show_form(
             step_id="preview",
-            data_schema=vol.Schema({}),
+            data_schema=preview_schema,
             description_placeholders={
                 "preview_text": preview_text,
                 "target_hours": str(self._options_data[CONF_TARGET_PHOTOPERIOD]),
             },
         )
+
 

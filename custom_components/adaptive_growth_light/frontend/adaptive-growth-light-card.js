@@ -4,7 +4,7 @@
  * Version: 1.0.0
  */
 
-const CARD_VERSION = "1.0.2";
+const CARD_VERSION = "1.0.3";
 
 console.info(
   `%c ADAPTIVE-GROWTH-LIGHT-CARD %c v${CARD_VERSION} `,

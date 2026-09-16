@@ -102,3 +102,102 @@ async def test_options_flow(hass: HomeAssistant) -> None:
     assert entry.data[CONF_TARGET_PHOTOPERIOD] == 14.5
     assert entry.data[CONF_LIGHTING_MODE] == "evening"
     assert entry.data[CONF_DAYLIGHT_OVERLAP] == 1.5
+
+
+async def test_config_flow_auto_name_from_entity(hass: HomeAssistant) -> None:
+    """Test that omitting name automatically derives a clean default name from target entity."""
+    # Pre-register state with friendly name
+    hass.states.async_set(
+        "light.living_room_ficus", "off", {"friendly_name": "Living Room Ficus"}
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    assert result["type"] is FlowResultType.FORM
+
+    # User does NOT provide CONF_NAME
+    user_input = {
+        CONF_TARGET_ENTITY: "light.living_room_ficus",
+        CONF_TARGET_PHOTOPERIOD: 14.0,
+        CONF_LIGHTING_MODE: "both",
+        CONF_MORNING_SPLIT: 50.0,
+        CONF_DAYLIGHT_OVERLAP: 1.0,
+    }
+
+    result_preview = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input,
+    )
+    assert result_preview["type"] is FlowResultType.FORM
+    assert result_preview["step_id"] == "preview"
+
+    # Confirm preview without editing name
+    result_create = await hass.config_entries.flow.async_configure(
+        result_preview["flow_id"],
+        {},
+    )
+    assert result_create["type"] is FlowResultType.CREATE_ENTRY
+    assert result_create["title"] == "Living Room Ficus Adaptive Light"
+    assert result_create["data"][CONF_NAME] == "Living Room Ficus Adaptive Light"
+
+
+async def test_config_flow_auto_name_entity_ending_with_light(
+    hass: HomeAssistant,
+) -> None:
+    """Test that entities ending with 'Light' don't get redundant 'Light' appended."""
+    hass.states.async_set(
+        "light.kitchen_grow_light", "off", {"friendly_name": "Kitchen Grow Light"}
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    result_preview = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_TARGET_ENTITY: "light.kitchen_grow_light",
+            CONF_TARGET_PHOTOPERIOD: 13.0,
+            CONF_LIGHTING_MODE: "evening",
+            CONF_MORNING_SPLIT: 50.0,
+            CONF_DAYLIGHT_OVERLAP: 0.5,
+        },
+    )
+    result_create = await hass.config_entries.flow.async_configure(
+        result_preview["flow_id"],
+        {},
+    )
+    assert result_create["type"] is FlowResultType.CREATE_ENTRY
+    assert result_create["title"] == "Kitchen Grow Adaptive Light"
+
+
+async def test_config_flow_preview_allows_overriding_auto_name(
+    hass: HomeAssistant,
+) -> None:
+    """Test that the user can override the automatically derived name during the preview step."""
+    hass.states.async_set(
+        "switch.shelf_plug", "off", {"friendly_name": "Shelf Plug"}
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    result_preview = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_TARGET_ENTITY: "switch.shelf_plug",
+            CONF_TARGET_PHOTOPERIOD: 14.0,
+            CONF_LIGHTING_MODE: "morning",
+            CONF_MORNING_SPLIT: 50.0,
+            CONF_DAYLIGHT_OVERLAP: 1.0,
+        },
+    )
+    # In preview step, user changes name to "My Custom Herb Lamp"
+    result_create = await hass.config_entries.flow.async_configure(
+        result_preview["flow_id"],
+        {CONF_NAME: "My Custom Herb Lamp"},
+    )
+    assert result_create["type"] is FlowResultType.CREATE_ENTRY
+    assert result_create["title"] == "My Custom Herb Lamp"
+    assert result_create["data"][CONF_NAME] == "My Custom Herb Lamp"
+

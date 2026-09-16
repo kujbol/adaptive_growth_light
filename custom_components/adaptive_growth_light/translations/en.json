@@ -5,17 +5,23 @@
         "title": "Configure Adaptive Growth Light",
         "description": "Set up intelligent supplemental lighting for your plants based on natural sunlight and target photoperiod.",
         "data": {
-          "name": "Name",
+          "name": "Name (optional)",
           "target_entity": "Plant Light / Switch Entity",
           "target_photoperiod": "Target Daily Photoperiod (hours)",
           "lighting_mode": "Lighting Routine Mode",
           "morning_split": "Morning Split Percentage (for 'Both' mode)",
           "daylight_overlap": "Daylight Overlap Buffer (hours)"
+        },
+        "data_description": {
+          "name": "Leave blank to automatically name after the selected entity (e.g. 'Ficus Adaptive Light')."
         }
       },
       "preview": {
         "title": "Seasonal Lighting Preview",
-        "description": "Review how your light will adapt across the seasons for your location ({target_hours}h target photoperiod):\n\n{preview_text}\n\nClick **Submit** to finalize setup."
+        "description": "Review how your light will adapt across the seasons for your location ({target_hours}h target photoperiod):\n\n{preview_text}\n\nClick **Submit** to finalize setup.",
+        "data": {
+          "name": "Device Name"
+        }
       }
     }
   },
