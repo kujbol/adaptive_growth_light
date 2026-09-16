@@ -1,0 +1,52 @@
+name: Test Suite & Multi-Version Compatibility
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test HA ${{ matrix.ha-version }} (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+        ha-version:
+          - "2024.7.1"
+          - "2024.8.0"
+          - "2024.9.0"
+          - "latest"
+        exclude:
+          - python-version: "3.13"
+            ha-version: "2024.7.1"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install astral>=2.2 pytest pytest-asyncio
+          if [ "${{ matrix.ha-version }}" = "latest" ]; then
+            pip install homeassistant pytest-homeassistant-custom-component
+          else
+            pip install homeassistant==${{ matrix.ha-version }} pytest-homeassistant-custom-component || pip install homeassistant pytest-homeassistant-custom-component
+          fi
+
+      - name: Run Pytest Compatibility Suite
+        run: |
+          pytest -v
+
+      - name: Verify Release Security & Dry Run
+        run: |
+          python release.py --dry-run
