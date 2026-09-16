@@ -29,8 +29,12 @@ except ImportError:
     StaticPathConfig = None
 
 
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up the integration and register frontend Lovelace card static path."""
+async def async_register_frontend(hass: HomeAssistant) -> None:
+    """Register frontend static path and automatically register the Lovelace card."""
+    if hass.data.setdefault(f"{DOMAIN}_frontend_registered", False):
+        return
+    hass.data[f"{DOMAIN}_frontend_registered"] = True
+
     card_path = Path(__file__).parent / FRONTEND_DIR / "adaptive-growth-light-card.js"
     if hasattr(hass, "http") and hass.http and card_path.exists():
         if hasattr(hass.http, "async_register_static_paths") and StaticPathConfig:
@@ -48,11 +52,41 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
                 cache_headers=False,
             )
         _LOGGER.debug("Registered static path for Adaptive Growth Light Card: %s", FRONTEND_URL)
+
+    # Automatically load the card module in Home Assistant frontend
+    if "frontend" in hass.config.components:
+        from homeassistant.components.frontend import add_extra_js_url
+        add_extra_js_url(hass, FRONTEND_URL)
+        _LOGGER.debug("Auto-registered Lovelace card module URL: %s", FRONTEND_URL)
+
+    # Also automatically register in Lovelace storage resources if available
+    try:
+        lovelace_data = hass.data.get("lovelace")
+        if lovelace_data and hasattr(lovelace_data, "resources"):
+            res_col = lovelace_data.resources
+            if hasattr(res_col, "async_items") and hasattr(res_col, "async_create_item"):
+                if not getattr(res_col, "loaded", True):
+                    await res_col.async_load()
+                existing_urls = [item.get("url") for item in res_col.async_items()]
+                if FRONTEND_URL not in existing_urls:
+                    await res_col.async_create_item({
+                        "res_type": "module",
+                        "url": FRONTEND_URL,
+                    })
+                    _LOGGER.info("Auto-registered %s in Lovelace dashboard resources", FRONTEND_URL)
+    except Exception as err:
+        _LOGGER.debug("Could not auto-add to Lovelace storage collection: %s", err)
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Set up the integration and register frontend Lovelace card."""
+    await async_register_frontend(hass)
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Adaptive Growth Light from a config entry."""
+    await async_register_frontend(hass)
     hass.data.setdefault(DOMAIN, {})
 
     coordinator = AdaptiveGrowthLightCoordinator(hass, entry.entry_id, entry.data)

@@ -105,6 +105,22 @@ async def test_async_setup_with_http(hass: HomeAssistant) -> None:
     mock_http.async_register_static_paths.assert_awaited_once()
 
 
+async def test_auto_register_frontend_resource(hass: HomeAssistant) -> None:
+    """Verify that frontend extra_js_url is auto-registered."""
+    from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
+    from custom_components.adaptive_growth_light import async_register_frontend
+    from custom_components.adaptive_growth_light.const import FRONTEND_URL, DOMAIN
+
+    # Reset registration flag
+    hass.data.pop(f"{DOMAIN}_frontend_registered", None)
+    hass.config.components.add("frontend")
+    hass.data[DATA_EXTRA_MODULE_URL] = set()
+
+    await async_register_frontend(hass)
+
+    assert FRONTEND_URL in hass.data[DATA_EXTRA_MODULE_URL]
+
+
 def test_brand_assets_validity() -> None:
     """Verify that all Home Assistant brand icons and logos exist with valid PNG format and dimensions."""
     from pathlib import Path
