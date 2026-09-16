@@ -12,12 +12,16 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_DAYLIGHT_OVERLAP,
+    CONF_EARLIEST_START,
+    CONF_LATEST_END,
     CONF_LIGHTING_MODE,
     CONF_MORNING_SPLIT,
     CONF_NAME,
     CONF_TARGET_ENTITY,
     CONF_TARGET_PHOTOPERIOD,
     DEFAULT_DAYLIGHT_OVERLAP,
+    DEFAULT_EARLIEST_START,
+    DEFAULT_LATEST_END,
     DEFAULT_LIGHTING_MODE,
     DEFAULT_MORNING_SPLIT,
     DEFAULT_NAME,
@@ -156,6 +160,14 @@ def get_config_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                     mode=selector.NumberSelectorMode.SLIDER,
                 )
             ),
+            vol.Optional(
+                CONF_EARLIEST_START,
+                default=str(defaults.get(CONF_EARLIEST_START, DEFAULT_EARLIEST_START)),
+            ): selector.TimeSelector(),
+            vol.Optional(
+                CONF_LATEST_END,
+                default=str(defaults.get(CONF_LATEST_END, DEFAULT_LATEST_END)),
+            ): selector.TimeSelector(),
         }
     )
     return vol.Schema(schema_dict)
@@ -196,14 +208,14 @@ class AdaptiveGrowthLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.ConfigFlowResult:
         """Display seasonal daylight vs. supplementary light preview before creating entry."""
         if user_input is not None:
+            self._config_data.update(user_input)
             preview_name = (user_input.get(CONF_NAME) or "").strip()
-            if preview_name:
-                self._config_data[CONF_NAME] = preview_name
-            name = self._config_data.get(CONF_NAME) or generate_default_name_from_entity(
-                self.hass, self._config_data.get(CONF_TARGET_ENTITY, "")
-            )
-            self._config_data[CONF_NAME] = name
-            return self.async_create_entry(title=name, data=self._config_data)
+            if not preview_name:
+                preview_name = generate_default_name_from_entity(
+                    self.hass, self._config_data.get(CONF_TARGET_ENTITY, "")
+                )
+            self._config_data[CONF_NAME] = preview_name
+            return self.async_create_entry(title=preview_name, data=self._config_data)
 
         calc = SolarCalculator(
             latitude=self.hass.config.latitude,
@@ -216,6 +228,8 @@ class AdaptiveGrowthLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             mode=self._config_data[CONF_LIGHTING_MODE],
             morning_split_pct=self._config_data[CONF_MORNING_SPLIT],
             overlap_hours=self._config_data[CONF_DAYLIGHT_OVERLAP],
+            earliest_start=self._config_data.get(CONF_EARLIEST_START, DEFAULT_EARLIEST_START),
+            latest_end=self._config_data.get(CONF_LATEST_END, DEFAULT_LATEST_END),
         )
 
         current_name = self._config_data.get(CONF_NAME) or generate_default_name_from_entity(
@@ -229,6 +243,26 @@ class AdaptiveGrowthLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_NAME,
                     default=current_name,
                 ): selector.TextSelector(),
+                vol.Required(
+                    CONF_TARGET_PHOTOPERIOD,
+                    default=float(self._config_data.get(CONF_TARGET_PHOTOPERIOD, DEFAULT_TARGET_PHOTOPERIOD)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=MIN_PHOTOPERIOD,
+                        max=MAX_PHOTOPERIOD,
+                        step=STEP_PHOTOPERIOD,
+                        unit_of_measurement="h",
+                        mode=selector.NumberSelectorMode.SLIDER,
+                    )
+                ),
+                vol.Optional(
+                    CONF_EARLIEST_START,
+                    default=str(self._config_data.get(CONF_EARLIEST_START, DEFAULT_EARLIEST_START)),
+                ): selector.TimeSelector(),
+                vol.Optional(
+                    CONF_LATEST_END,
+                    default=str(self._config_data.get(CONF_LATEST_END, DEFAULT_LATEST_END)),
+                ): selector.TimeSelector(),
             }
         )
 
@@ -282,15 +316,15 @@ class AdaptiveGrowthLightOptionsFlowHandler(config_entries.OptionsFlow):
     ) -> config_entries.ConfigFlowResult:
         """Display seasonal preview before saving updated settings."""
         if user_input is not None:
+            self._options_data.update(user_input)
             preview_name = (user_input.get(CONF_NAME) or "").strip()
-            if preview_name:
-                self._options_data[CONF_NAME] = preview_name
-            name = self._options_data.get(CONF_NAME) or self.config_entry.title
-            self._options_data[CONF_NAME] = name
+            if not preview_name:
+                preview_name = self._options_data.get(CONF_NAME) or self.config_entry.title
+            self._options_data[CONF_NAME] = preview_name
 
             self.hass.config_entries.async_update_entry(
                 self.config_entry,
-                title=name,
+                title=preview_name,
                 data={**self.config_entry.data, **self._options_data},
             )
             return self.async_create_entry(title="", data=self._options_data)
@@ -306,6 +340,8 @@ class AdaptiveGrowthLightOptionsFlowHandler(config_entries.OptionsFlow):
             mode=self._options_data[CONF_LIGHTING_MODE],
             morning_split_pct=self._options_data[CONF_MORNING_SPLIT],
             overlap_hours=self._options_data[CONF_DAYLIGHT_OVERLAP],
+            earliest_start=self._options_data.get(CONF_EARLIEST_START, DEFAULT_EARLIEST_START),
+            latest_end=self._options_data.get(CONF_LATEST_END, DEFAULT_LATEST_END),
         )
 
         current_name = self._options_data.get(CONF_NAME, self.config_entry.title)
@@ -315,6 +351,26 @@ class AdaptiveGrowthLightOptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_NAME,
                     default=current_name,
                 ): selector.TextSelector(),
+                vol.Required(
+                    CONF_TARGET_PHOTOPERIOD,
+                    default=float(self._options_data.get(CONF_TARGET_PHOTOPERIOD, DEFAULT_TARGET_PHOTOPERIOD)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=MIN_PHOTOPERIOD,
+                        max=MAX_PHOTOPERIOD,
+                        step=STEP_PHOTOPERIOD,
+                        unit_of_measurement="h",
+                        mode=selector.NumberSelectorMode.SLIDER,
+                    )
+                ),
+                vol.Optional(
+                    CONF_EARLIEST_START,
+                    default=str(self._options_data.get(CONF_EARLIEST_START, DEFAULT_EARLIEST_START)),
+                ): selector.TimeSelector(),
+                vol.Optional(
+                    CONF_LATEST_END,
+                    default=str(self._options_data.get(CONF_LATEST_END, DEFAULT_LATEST_END)),
+                ): selector.TimeSelector(),
             }
         )
 

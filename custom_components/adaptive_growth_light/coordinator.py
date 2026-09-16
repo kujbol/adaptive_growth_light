@@ -13,20 +13,24 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_DAYLIGHT_OVERLAP,
+    CONF_EARLIEST_START,
+    CONF_LATEST_END,
     CONF_LIGHTING_MODE,
     CONF_MORNING_SPLIT,
     CONF_NAME,
     CONF_TARGET_ENTITY,
     CONF_TARGET_PHOTOPERIOD,
     DEFAULT_DAYLIGHT_OVERLAP,
+    DEFAULT_EARLIEST_START,
     DEFAULT_ENABLED,
+    DEFAULT_LATEST_END,
     DEFAULT_LIGHTING_MODE,
     DEFAULT_MORNING_SPLIT,
     DEFAULT_NAME,
     DEFAULT_TARGET_PHOTOPERIOD,
     DOMAIN,
 )
-from .solar import DailyPhotoperiod, NextSession, SolarCalculator
+from .solar import DailyPhotoperiod, NextSession, SolarCalculator, parse_time_helper
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,6 +52,12 @@ class AdaptiveGrowthLightCoordinator:
         )
         self.daylight_overlap: float = float(
             data.get(CONF_DAYLIGHT_OVERLAP, DEFAULT_DAYLIGHT_OVERLAP)
+        )
+        self.earliest_start = parse_time_helper(
+            data.get(CONF_EARLIEST_START, DEFAULT_EARLIEST_START)
+        )
+        self.latest_end = parse_time_helper(
+            data.get(CONF_LATEST_END, DEFAULT_LATEST_END)
         )
         self.is_enabled: bool = DEFAULT_ENABLED
 
@@ -111,6 +121,8 @@ class AdaptiveGrowthLightCoordinator:
             mode=self.lighting_mode,
             morning_split_pct=self.morning_split,
             overlap_hours=self.daylight_overlap,
+            earliest_start=self.earliest_start,
+            latest_end=self.latest_end,
         )
         self.next_session = self.solar_calculator.get_next_session(
             now=now,
@@ -118,6 +130,8 @@ class AdaptiveGrowthLightCoordinator:
             mode=self.lighting_mode,
             morning_split_pct=self.morning_split,
             overlap_hours=self.daylight_overlap,
+            earliest_start=self.earliest_start,
+            latest_end=self.latest_end,
         )
         self.status = self.solar_calculator.get_current_status(
             now=now,
@@ -125,6 +139,8 @@ class AdaptiveGrowthLightCoordinator:
             mode=self.lighting_mode,
             morning_split_pct=self.morning_split,
             overlap_hours=self.daylight_overlap,
+            earliest_start=self.earliest_start,
+            latest_end=self.latest_end,
             is_enabled=self.is_enabled,
         )
 
@@ -278,6 +294,20 @@ class AdaptiveGrowthLightCoordinator:
         await self._async_evaluate_and_schedule()
         self._notify_listeners()
 
+    async def async_set_earliest_start(self, earliest: Any) -> None:
+        """Update earliest morning turn-on cut-off."""
+        self.earliest_start = parse_time_helper(earliest)
+        self.recalculate()
+        await self._async_evaluate_and_schedule()
+        self._notify_listeners()
+
+    async def async_set_latest_end(self, latest: Any) -> None:
+        """Update latest evening turn-off cut-off."""
+        self.latest_end = parse_time_helper(latest)
+        self.recalculate()
+        await self._async_evaluate_and_schedule()
+        self._notify_listeners()
+
     def get_seasonal_matrix(self) -> list[dict[str, Any]]:
         """Return 12-month solar and supplementary light breakdown."""
         return self.solar_calculator.get_seasonal_matrix(
@@ -285,6 +315,21 @@ class AdaptiveGrowthLightCoordinator:
             mode=self.lighting_mode,
             morning_split_pct=self.morning_split,
             overlap_hours=self.daylight_overlap,
+            earliest_start=self.earliest_start,
+            latest_end=self.latest_end,
+        )
+
+    def get_annual_earliest_turn_on(self) -> dict[str, Any]:
+        """Return annual earliest turn-on statistics."""
+        now = dt_util.now()
+        return self.solar_calculator.get_annual_earliest_turn_on(
+            year=now.year,
+            target_hours=self.target_photoperiod,
+            mode=self.lighting_mode,
+            morning_split_pct=self.morning_split,
+            overlap_hours=self.daylight_overlap,
+            earliest_start=self.earliest_start,
+            latest_end=self.latest_end,
         )
 
     def async_unload(self) -> None:

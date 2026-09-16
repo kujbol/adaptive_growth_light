@@ -10,17 +10,24 @@
           "target_photoperiod": "Target Daily Photoperiod (hours)",
           "lighting_mode": "Lighting Routine Mode",
           "morning_split": "Morning Split Percentage (for 'Both' mode)",
-          "daylight_overlap": "Daylight Overlap Buffer (hours)"
+          "daylight_overlap": "Daylight Overlap Buffer (hours)",
+          "earliest_start": "Earliest Morning Start (Cut-Off)",
+          "latest_end": "Latest Evening End (Cut-Off)"
         },
         "data_description": {
-          "name": "Leave blank to automatically name after the selected entity (e.g. 'Ficus Adaptive Light')."
+          "name": "Leave blank to automatically name after the selected entity (e.g. 'Ficus Adaptive Light').",
+          "earliest_start": "Do not turn on lights before this time. Displaced hours are automatically shifted to the evening session.",
+          "latest_end": "Do not keep lights on past this time in the evening."
         }
       },
       "preview": {
         "title": "Seasonal Lighting Preview",
         "description": "Review how your light will adapt across the seasons for your location ({target_hours}h target photoperiod):\n\n{preview_text}\n\nClick **Submit** to finalize setup.",
         "data": {
-          "name": "Device Name"
+          "name": "Device Name",
+          "target_photoperiod": "Target Daily Photoperiod (hours)",
+          "earliest_start": "Earliest Morning Start",
+          "latest_end": "Latest Evening End"
         }
       }
     }
@@ -29,19 +36,31 @@
     "step": {
       "init": {
         "title": "Adaptive Growth Light Settings",
-        "description": "Adjust photoperiod, lighting modes, and schedule parameters.",
+        "description": "Adjust photoperiod, lighting modes, cut-offs, and schedule parameters.",
         "data": {
           "name": "Name",
           "target_entity": "Plant Light / Switch Entity",
           "target_photoperiod": "Target Daily Photoperiod (hours)",
           "lighting_mode": "Lighting Routine Mode",
           "morning_split": "Morning Split Percentage (for 'Both' mode)",
-          "daylight_overlap": "Daylight Overlap Buffer (hours)"
+          "daylight_overlap": "Daylight Overlap Buffer (hours)",
+          "earliest_start": "Earliest Morning Start (Cut-Off)",
+          "latest_end": "Latest Evening End (Cut-Off)"
+        },
+        "data_description": {
+          "earliest_start": "Do not turn on lights before this time. Displaced hours are automatically shifted to the evening session.",
+          "latest_end": "Do not keep lights on past this time in the evening."
         }
       },
       "preview": {
         "title": "Seasonal Lighting Preview",
-        "description": "Review your updated seasonal schedule ({target_hours}h target photoperiod):\n\n{preview_text}\n\nClick **Submit** to save changes."
+        "description": "Review your updated seasonal schedule ({target_hours}h target photoperiod):\n\n{preview_text}\n\nClick **Submit** to save changes.",
+        "data": {
+          "name": "Device Name",
+          "target_photoperiod": "Target Daily Photoperiod (hours)",
+          "earliest_start": "Earliest Morning Start",
+          "latest_end": "Latest Evening End"
+        }
       }
     }
   },
@@ -82,6 +101,17 @@
       },
       "seasonal_profile": {
         "name": "Seasonal Profile"
+      },
+      "earliest_turn_on": {
+        "name": "Earliest Turn-On of Year"
+      }
+    },
+    "time": {
+      "earliest_start": {
+        "name": "Earliest Morning Start"
+      },
+      "latest_end": {
+        "name": "Latest Evening End"
       }
     },
     "number": {

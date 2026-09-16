@@ -10,17 +10,24 @@
           "target_photoperiod": "Docelowy fotoperiod dzienny (godziny)",
           "lighting_mode": "Tryb doświetlania",
           "morning_split": "Udział poranny w trybie łączonym (%)",
-          "daylight_overlap": "Bufor nakładania z dniem (godziny)"
+          "daylight_overlap": "Bufor nakładania z dniem (godziny)",
+          "earliest_start": "Najwcześniejszy start rano (blokada)",
+          "latest_end": "Najpóźniejszy koniec wieczorem (blokada)"
         },
         "data_description": {
-          "name": "Pozostaw puste, aby nazwa została wygenerowana automatycznie na podstawie wybranego światła (np. 'Fikus Adaptive Light')."
+          "name": "Pozostaw puste, aby nazwa została wygenerowana automatycznie na podstawie wybranego światła (np. 'Fikus Adaptive Light').",
+          "earliest_start": "Światło nie włączy się przed tą godziną. Obcięty czas zostanie automatycznie przeniesiony na sesję wieczorną.",
+          "latest_end": "Światło wyłączy się najpóźniej o tej godzinie wieczorem."
         }
       },
       "preview": {
         "title": "Podgląd Doświetlania w Sezonach",
         "description": "Zobacz, jak doświetlanie będzie adaptować się w ciągu roku dla Twojej lokalizacji (fotoperiod: {target_hours}h):\n\n{preview_text}\n\nKliknij **Zatwierdź**, aby zakończyć konfigurację.",
         "data": {
-          "name": "Nazwa urządzenia"
+          "name": "Nazwa urządzenia",
+          "target_photoperiod": "Docelowy fotoperiod dzienny (godziny)",
+          "earliest_start": "Najwcześniejszy start rano",
+          "latest_end": "Najpóźniejszy koniec wieczorem"
         }
       }
     }
@@ -29,19 +36,31 @@
     "step": {
       "init": {
         "title": "Ustawienia Doświetlania Roślin",
-        "description": "Dostosuj fotoperiod, tryby świecenia i harmonogram.",
+        "description": "Dostosuj fotoperiod, tryby świecenia, godziny blokad i harmonogram.",
         "data": {
           "name": "Nazwa",
           "target_entity": "Światło lub przełącznik doświetlania",
           "target_photoperiod": "Docelowy fotoperiod dzienny (godziny)",
           "lighting_mode": "Tryb doświetlania",
           "morning_split": "Udział poranny w trybie łączonym (%)",
-          "daylight_overlap": "Bufor nakładania z dniem (godziny)"
+          "daylight_overlap": "Bufor nakładania z dniem (godziny)",
+          "earliest_start": "Najwcześniejszy start rano (blokada)",
+          "latest_end": "Najpóźniejszy koniec wieczorem (blokada)"
+        },
+        "data_description": {
+          "earliest_start": "Światło nie włączy się przed tą godziną. Obcięty czas zostanie automatycznie przeniesiony na sesję wieczorną.",
+          "latest_end": "Światło wyłączy się najpóźniej o tej godzinie wieczorem."
         }
       },
       "preview": {
         "title": "Zaktualizowany Podgląd Sezonowy",
-        "description": "Sprawdź zaktualizowany harmonogram w sezonach (fotoperiod: {target_hours}h):\n\n{preview_text}\n\nKliknij **Zatwierdź**, aby zapisać zmiany."
+        "description": "Sprawdź zaktualizowany harmonogram w sezonach (fotoperiod: {target_hours}h):\n\n{preview_text}\n\nKliknij **Zatwierdź**, aby zapisać zmiany.",
+        "data": {
+          "name": "Nazwa urządzenia",
+          "target_photoperiod": "Docelowy fotoperiod dzienny (godziny)",
+          "earliest_start": "Najwcześniejszy start rano",
+          "latest_end": "Najpóźniejszy koniec wieczorem"
+        }
       }
     }
   },
@@ -82,6 +101,17 @@
       },
       "seasonal_profile": {
         "name": "Profil sezonowy"
+      },
+      "earliest_turn_on": {
+        "name": "Najwcześniejsze włączenie w roku"
+      }
+    },
+    "time": {
+      "earliest_start": {
+        "name": "Najwcześniejszy start rano"
+      },
+      "latest_end": {
+        "name": "Najpóźniejszy koniec wieczorem"
       }
     },
     "number": {

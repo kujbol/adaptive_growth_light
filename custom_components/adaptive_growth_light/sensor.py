@@ -32,6 +32,7 @@ async def async_setup_entry(
         AdaptiveGrowthLightSupplementaryHoursSensor(coordinator, entry),
         AdaptiveGrowthLightNaturalDaylightSensor(coordinator, entry),
         AdaptiveGrowthLightSeasonalProfileSensor(coordinator, entry),
+        AdaptiveGrowthLightEarliestTurnOnSensor(coordinator, entry),
     ]
 
     async_add_entities(entities)
@@ -201,4 +202,57 @@ class AdaptiveGrowthLightSeasonalProfileSensor(AdaptiveGrowthLightBaseSensor):
             "lighting_mode": self.coordinator.lighting_mode,
             "morning_split": self.coordinator.morning_split,
             "daylight_overlap": self.coordinator.daylight_overlap,
+        }
+
+
+class AdaptiveGrowthLightEarliestTurnOnSensor(AdaptiveGrowthLightBaseSensor):
+    """Sensor reporting the annual earliest turn-on time for grow lighting."""
+
+    _attr_icon = "mdi:weather-sunset-up"
+
+    def __init__(self, coordinator: AdaptiveGrowthLightCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_name = "Earliest Turn-On of Year"
+        self._attr_unique_id = f"{entry.entry_id}_earliest_turn_on"
+
+    @property
+    def native_value(self) -> str:
+        """Return formatted earliest turn-on time."""
+        stats = self.coordinator.get_annual_earliest_turn_on()
+        eff = stats.get("effective_time")
+        if not eff:
+            return "None (Evening Only)"
+        return eff
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return annual turn-on breakdown attributes."""
+        stats = self.coordinator.get_annual_earliest_turn_on()
+        plan = self.coordinator.today_plan
+        return {
+            "effective_time": stats.get("effective_time"),
+            "unclamped_time": stats.get("unclamped_time"),
+            "is_clamped": stats.get("is_clamped"),
+            "date": stats.get("date"),
+            "benchmark": stats.get("benchmark"),
+            "earliest_start_cutoff": (
+                self.coordinator.earliest_start.strftime("%H:%M:%S")
+                if self.coordinator.earliest_start
+                else None
+            ),
+            "latest_end_cutoff": (
+                self.coordinator.latest_end.strftime("%H:%M:%S")
+                if self.coordinator.latest_end
+                else None
+            ),
+            "today_morning_start": (
+                plan.morning_session.start.strftime("%H:%M")
+                if (plan and plan.morning_session)
+                else None
+            ),
+            "today_evening_start": (
+                plan.evening_session.start.strftime("%H:%M")
+                if (plan and plan.evening_session)
+                else None
+            ),
         }

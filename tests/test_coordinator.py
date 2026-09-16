@@ -123,3 +123,36 @@ async def test_seasonal_matrix_from_coordinator(hass: HomeAssistant) -> None:
         assert "month" in m
         assert "natural_hours" in m
         assert "supplementary_hours" in m
+
+
+async def test_coordinator_cutoffs_and_annual_earliest(hass: HomeAssistant) -> None:
+    from datetime import time
+
+    await hass.config.async_set_time_zone("Europe/Warsaw")
+    await hass.config.async_update(latitude=52.2297, longitude=21.0122, elevation=100)
+
+    data = {
+        CONF_NAME: "Living Room Ficus",
+        CONF_TARGET_ENTITY: "light.ficus_light",
+        CONF_TARGET_PHOTOPERIOD: 14.0,
+        CONF_LIGHTING_MODE: "both",
+        CONF_MORNING_SPLIT: 50.0,
+        CONF_DAYLIGHT_OVERLAP: 1.0,
+        "earliest_start": "06:30:00",
+        "latest_end": "22:00:00",
+    }
+    coordinator = AdaptiveGrowthLightCoordinator(hass, "test_entry_3", data)
+    assert coordinator.earliest_start == time(6, 30)
+    assert coordinator.latest_end == time(22, 0)
+
+    stats = coordinator.get_annual_earliest_turn_on()
+    assert "effective_time" in stats
+    assert "unclamped_time" in stats
+    assert "is_clamped" in stats
+
+    # Change cutoffs dynamically
+    await coordinator.async_set_earliest_start(time(7, 0))
+    assert coordinator.earliest_start == time(7, 0)
+
+    await coordinator.async_set_latest_end("21:30:00")
+    assert coordinator.latest_end == time(21, 30)

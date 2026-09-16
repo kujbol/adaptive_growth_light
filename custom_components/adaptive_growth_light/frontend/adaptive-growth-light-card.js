@@ -4,7 +4,7 @@
  * Version: 1.0.0
  */
 
-const CARD_VERSION = "1.0.3";
+const CARD_VERSION = "1.1.0";
 
 console.info(
   `%c ADAPTIVE-GROWTH-LIGHT-CARD %c v${CARD_VERSION} `,
@@ -72,9 +72,12 @@ class AdaptiveGrowthLightCard extends HTMLElement {
     const suppHoursSensor = resolveEntity("sensor", "supplementary_hours");
     const naturalDaylightSensor = resolveEntity("sensor", "natural_daylight");
     const seasonalProfileSensor = resolveEntity("sensor", "seasonal_profile");
+    const earliestTurnOnSensor = resolveEntity("sensor", "earliest_turn_on");
     const targetPhotoperiodNumber = resolveEntity("number", "target_photoperiod");
     const morningSplitNumber = resolveEntity("number", "morning_split");
     const daylightOverlapNumber = resolveEntity("number", "daylight_overlap");
+    const earliestStartEntity = resolveEntity("time", "earliest_start");
+    const latestEndEntity = resolveEntity("time", "latest_end");
     const lightingModeSelect = resolveEntity("select", "lighting_mode");
 
     return {
@@ -84,9 +87,12 @@ class AdaptiveGrowthLightCard extends HTMLElement {
       suppHoursSensor,
       naturalDaylightSensor,
       seasonalProfileSensor,
+      earliestTurnOnSensor,
       targetPhotoperiodNumber,
       morningSplitNumber,
       daylightOverlapNumber,
+      earliestStartEntity,
+      latestEndEntity,
       lightingModeSelect,
     };
   }
@@ -142,6 +148,32 @@ class AdaptiveGrowthLightCard extends HTMLElement {
       this._hass.callService("number", "set_value", {
         entity_id: daylightOverlapNumber.entity_id,
         value: val,
+      });
+    }
+  }
+
+  _setEarliestStart(e) {
+    const val = e.target.value;
+    if (!val) return;
+    const { earliestStartEntity } = this._findCompanionEntities();
+    if (earliestStartEntity) {
+      const timeStr = val.length === 5 ? `${val}:00` : val;
+      this._hass.callService("time", "set_value", {
+        entity_id: earliestStartEntity.entity_id,
+        time: timeStr,
+      });
+    }
+  }
+
+  _setLatestEnd(e) {
+    const val = e.target.value;
+    if (!val) return;
+    const { latestEndEntity } = this._findCompanionEntities();
+    if (latestEndEntity) {
+      const timeStr = val.length === 5 ? `${val}:00` : val;
+      this._hass.callService("time", "set_value", {
+        entity_id: latestEndEntity.entity_id,
+        time: timeStr,
       });
     }
   }
@@ -280,6 +312,118 @@ class AdaptiveGrowthLightCard extends HTMLElement {
     `;
   }
 
+  _renderDayTimeline(statusSensor, earliestTurnOnSensor, earliestStartEntity, latestEndEntity) {
+    const sunriseStr = statusSensor?.attributes?.sunrise;
+    const sunsetStr = statusSensor?.attributes?.sunset;
+    const earliestStats = earliestTurnOnSensor?.attributes || {};
+    const earliestEff = earliestTurnOnSensor?.state || "--:--";
+
+    const parseIsoHour = (iso) => {
+      if (!iso) return null;
+      const d = new Date(iso);
+      return d.getHours() + d.getMinutes() / 60.0;
+    };
+    const parseTimeStr = (tStr) => {
+      if (!tStr) return null;
+      const parts = tStr.split(":");
+      return parseInt(parts[0], 10) + parseInt(parts[1], 10) / 60.0;
+    };
+
+    const sunriseH = parseIsoHour(sunriseStr) ?? 6.5;
+    const sunsetH = parseIsoHour(sunsetStr) ?? 18.5;
+
+    const mornStartStr = earliestStats.today_morning_start;
+    const eveStartStr = earliestStats.today_evening_start;
+    const mornStartH = parseTimeStr(mornStartStr);
+    const eveStartH = parseTimeStr(eveStartStr);
+
+    const earliestCutoffH = parseTimeStr(earliestStartEntity?.state || "06:30:00");
+    const latestCutoffH = parseTimeStr(latestEndEntity?.state || "22:00:00");
+
+    const now = new Date();
+    const nowH = now.getHours() + now.getMinutes() / 60.0;
+
+    const width = 460;
+    const height = 48;
+    const barY = 16;
+    const barH = 14;
+    const scaleX = (h) => Math.max(0, Math.min(width, (h / 24.0) * width));
+
+    // Time markers
+    let markersSvg = "";
+    [0, 3, 6, 9, 12, 15, 18, 21, 24].forEach((h) => {
+      const x = scaleX(h);
+      markersSvg += `
+        <line x1="${x}" y1="2" x2="${x}" y2="12" stroke="rgba(255,255,255,0.12)" stroke-width="1" />
+        <text x="${x}" y="10" font-size="8" fill="#9ca3af" text-anchor="${h === 0 ? 'start' : (h === 24 ? 'end' : 'middle')}">${String(h).padStart(2, '0')}:00</text>
+      `;
+    });
+
+    let rectsSvg = "";
+    // Background bar (Night)
+    rectsSvg += `<rect x="0" y="${barY}" width="${width}" height="${barH}" rx="4" fill="rgba(255,255,255,0.06)" />`;
+
+    // Suppressed morning cut-off zone
+    if (earliestCutoffH && earliestCutoffH > 0) {
+      const cutX = scaleX(earliestCutoffH);
+      rectsSvg += `<rect x="0" y="${barY}" width="${cutX}" height="${barH}" rx="4" fill="rgba(239, 68, 68, 0.18)" stroke="rgba(239, 68, 68, 0.35)" stroke-dasharray="2,2" stroke-width="1" />`;
+    }
+
+    // Suppressed evening cut-off zone
+    if (latestCutoffH && latestCutoffH < 24) {
+      const cutX = scaleX(latestCutoffH);
+      rectsSvg += `<rect x="${cutX}" y="${barY}" width="${width - cutX}" height="${barH}" rx="4" fill="rgba(239, 68, 68, 0.18)" stroke="rgba(239, 68, 68, 0.35)" stroke-dasharray="2,2" stroke-width="1" />`;
+    }
+
+    // Morning grow light session
+    if (mornStartH !== null && mornStartH < sunriseH) {
+      const startX = scaleX(mornStartH);
+      const endX = scaleX(sunriseH);
+      rectsSvg += `<rect x="${startX}" y="${barY}" width="${Math.max(2, endX - startX)}" height="${barH}" fill="#10b981" rx="2" opacity="0.95" />`;
+    }
+
+    // Natural daylight
+    const sunStartX = scaleX(sunriseH);
+    const sunEndX = scaleX(sunsetH);
+    rectsSvg += `<rect x="${sunStartX}" y="${barY}" width="${Math.max(2, sunEndX - sunStartX)}" height="${barH}" fill="#f59e0b" rx="2" opacity="0.95" />`;
+
+    // Evening grow light session
+    if (eveStartH !== null) {
+      const eveLimit = latestCutoffH && latestCutoffH < 24 ? latestCutoffH : 24;
+      const eveEndX = scaleX(eveLimit);
+      const startX = scaleX(eveStartH);
+      if (eveEndX > startX) {
+        rectsSvg += `<rect x="${startX}" y="${barY}" width="${Math.max(2, eveEndX - startX)}" height="${barH}" fill="#10b981" rx="2" opacity="0.95" />`;
+      }
+    }
+
+    // Now indicator
+    const nowX = scaleX(nowH);
+    const nowSvg = `
+      <line x1="${nowX}" y1="${barY - 3}" x2="${nowX}" y2="${barY + barH + 3}" stroke="#38bdf8" stroke-width="2" />
+      <polygon points="${nowX-3},${barY-4} ${nowX+3},${barY-4} ${nowX},${barY}" fill="#38bdf8" />
+    `;
+
+    return `
+      <div class="day-timeline-card">
+        <div class="timeline-title-row">
+          <span class="timeline-title">24h Schedule Timeline</span>
+          <span class="earliest-badge">Earliest Turn-On: <strong>${earliestEff}</strong></span>
+        </div>
+        <svg viewBox="0 0 ${width} ${height}" class="timeline-svg" style="width: 100%; height: auto; display: block;">
+          ${markersSvg}
+          ${rectsSvg}
+          ${nowSvg}
+        </svg>
+        <div class="timeline-legend">
+          <span class="legend-item"><span class="dot sun-dot"></span>Sunlight (${sunriseStr ? new Date(sunriseStr).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '06:30'} - ${sunsetStr ? new Date(sunsetStr).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '18:30'})</span>
+          <span class="legend-item"><span class="dot plant-dot"></span>Grow Light</span>
+          <span class="legend-item"><span class="dot cutoff-dot"></span>Cut-Off Restricted</span>
+        </div>
+      </div>
+    `;
+  }
+
   render() {
     if (!this._hass || !this._config) return;
 
@@ -290,9 +434,12 @@ class AdaptiveGrowthLightCard extends HTMLElement {
       suppHoursSensor,
       naturalDaylightSensor,
       seasonalProfileSensor,
+      earliestTurnOnSensor,
       targetPhotoperiodNumber,
       morningSplitNumber,
       daylightOverlapNumber,
+      earliestStartEntity,
+      latestEndEntity,
       lightingModeSelect,
     } = this._findCompanionEntities();
 
@@ -305,6 +452,8 @@ class AdaptiveGrowthLightCard extends HTMLElement {
     const morningSplit = morningSplitNumber ? parseFloat(morningSplitNumber.state) || 50.0 : 50.0;
     const daylightOverlap = daylightOverlapNumber ? parseFloat(daylightOverlapNumber.state) || 1.0 : 1.0;
     const lightingMode = lightingModeSelect ? lightingModeSelect.state : "both";
+    const earliestStartVal = earliestStartEntity?.state ? earliestStartEntity.state.substring(0, 5) : "06:30";
+    const latestEndVal = latestEndEntity?.state ? latestEndEntity.state.substring(0, 5) : "22:00";
 
     const seasonalMonths = seasonalProfileSensor?.attributes?.months || [];
     const targetEntityId = automationSwitch?.attributes?.target_entity || "";
@@ -707,6 +856,72 @@ class AdaptiveGrowthLightCard extends HTMLElement {
         .manual-btn:hover {
           background: rgba(52, 211, 153, 0.25);
         }
+        /* 24h Timeline Card */
+        .day-timeline-card {
+          background: rgba(0, 0, 0, 0.25);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          border-radius: 12px;
+          padding: 10px 12px;
+          margin-bottom: 14px;
+        }
+        .timeline-title-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 6px;
+        }
+        .timeline-title {
+          font-size: 11px;
+          font-weight: 700;
+          color: #d1d5db;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .earliest-badge {
+          font-size: 11px;
+          color: #a7f3d0;
+          background: rgba(16, 185, 129, 0.15);
+          border: 1px solid rgba(52, 211, 153, 0.3);
+          border-radius: 6px;
+          padding: 2px 8px;
+        }
+        .timeline-legend {
+          display: flex;
+          gap: 12px;
+          font-size: 10px;
+          color: #9ca3af;
+          margin-top: 8px;
+          flex-wrap: wrap;
+        }
+        .cutoff-dot { background: rgba(239, 68, 68, 0.85); }
+        /* Cutoff Row */
+        .cutoff-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin-top: 6px;
+        }
+        .cutoff-group {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .cutoff-group label {
+          font-size: 11px;
+          color: #9ca3af;
+          font-weight: 600;
+        }
+        .cutoff-group input[type=time] {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 8px;
+          color: #34d399;
+          font-weight: 700;
+          font-size: 13px;
+          padding: 6px 10px;
+          outline: none;
+          color-scheme: dark;
+        }
       </style>
 
       <ha-card>
@@ -743,6 +958,9 @@ class AdaptiveGrowthLightCard extends HTMLElement {
             <span>${nextSessionText}</span>
           </div>
         </div>
+
+        <!-- 24h Photoperiod Timeline -->
+        ${this._renderDayTimeline(statusSensor, earliestTurnOnSensor, earliestStartEntity, latestEndEntity)}
 
         <!-- Minimal Metrics Grid -->
         <div class="metrics-grid">
@@ -811,6 +1029,24 @@ class AdaptiveGrowthLightCard extends HTMLElement {
               <input type="range" id="overlap-slider" min="0" max="3" step="0.25" value="${daylightOverlap}">
             </div>
 
+            <!-- Sleep Protection Cut-Off Controls -->
+            <div class="control-group">
+              <div class="control-label-row">
+                <span>Sleep Protection Cut-Offs</span>
+                <span class="control-value">${earliestStartVal} - ${latestEndVal}</span>
+              </div>
+              <div class="cutoff-row">
+                <div class="cutoff-group">
+                  <label>Earliest Morning Start</label>
+                  <input type="time" id="earliest-start-input" value="${earliestStartVal}">
+                </div>
+                <div class="cutoff-group">
+                  <label>Latest Evening End</label>
+                  <input type="time" id="latest-end-input" value="${latestEndVal}">
+                </div>
+              </div>
+            </div>
+
             <!-- Seasonal Chart -->
             ${this._renderSeasonalChart(seasonalMonths, targetHours)}
 
@@ -858,6 +1094,16 @@ class AdaptiveGrowthLightCard extends HTMLElement {
     const overlapSlider = root.getElementById("overlap-slider");
     if (overlapSlider) {
       overlapSlider.addEventListener("change", (e) => this._setOverlap(e));
+    }
+
+    const earliestInput = root.getElementById("earliest-start-input");
+    if (earliestInput) {
+      earliestInput.addEventListener("change", (e) => this._setEarliestStart(e));
+    }
+
+    const latestInput = root.getElementById("latest-end-input");
+    if (latestInput) {
+      latestInput.addEventListener("change", (e) => this._setLatestEnd(e));
     }
 
     const modeBtns = root.querySelectorAll(".mode-btn");

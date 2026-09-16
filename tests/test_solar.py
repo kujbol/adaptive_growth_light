@@ -1,6 +1,6 @@
 """Unit tests for solar photoperiod calculation engine."""
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 import zoneinfo
 import pytest
 
@@ -215,3 +215,112 @@ def test_polar_coordinates_safety():
     plan_winter = svalbard_calc.get_daily_photoperiod(date(2026, 12, 21), target_hours=14.0)
     assert plan_winter.natural_daylight_hours == 0.0
     assert plan_winter.supplementary_hours == 14.0
+
+
+def test_cutoff_clamping_and_evening_reallocation(warsaw_calculator: SolarCalculator):
+    winter_date = date(2026, 12, 21)
+    
+    # 1. Unclamped plan
+    unclamped = warsaw_calculator.get_daily_photoperiod(
+        winter_date, target_hours=14.0, mode="both", morning_split_pct=50.0, overlap_hours=1.0
+    )
+    unclamped_m_start = unclamped.morning_session.start.time()
+    unclamped_e_dur = unclamped.evening_session.duration_hours
+
+    # 2. Clamped plan with morning cutoff at 07:00
+    cutoff_time = time(7, 0)
+    assert unclamped_m_start < cutoff_time  # astronomical start was earlier (e.g. ~05:27)
+
+    clamped = warsaw_calculator.get_daily_photoperiod(
+        winter_date,
+        target_hours=14.0,
+        mode="both",
+        morning_split_pct=50.0,
+        overlap_hours=1.0,
+        earliest_start=cutoff_time,
+        latest_end=time(22, 0),
+    )
+
+    # Morning session must be clamped strictly to 07:00
+    assert clamped.morning_session.start.time() == cutoff_time
+    assert clamped.morning_displaced_duration.total_seconds() > 0
+
+    # Evening session must receive the displaced morning duration
+    assert clamped.evening_session.duration_hours > unclamped_e_dur
+    assert abs(clamped.actual_photoperiod_hours - 14.0) < 0.1
+
+
+def test_annual_earliest_turn_on(warsaw_calculator: SolarCalculator):
+    earliest_info = warsaw_calculator.get_annual_earliest_turn_on(
+        target_hours=14.0,
+        mode="both",
+        morning_split_pct=50.0,
+        overlap_hours=1.0,
+        earliest_start=time(7, 0),
+        latest_end=time(22, 0),
+        year=2026,
+    )
+
+    assert earliest_info["is_clamped"] is True
+    assert earliest_info["effective_time"] == "07:00"
+    assert earliest_info["unclamped_time"] < "07:00"
+    assert earliest_info["date"] is not None
+
+
+def test_precision_ascii_timeline_alignment(warsaw_calculator: SolarCalculator):
+    timeline = warsaw_calculator.get_precision_ascii_timeline(
+        target_hours=14.0,
+        mode="both",
+        morning_split_pct=50.0,
+        overlap_hours=1.0,
+        earliest_start="07:00:00",
+        latest_end="22:00:00",
+        year=2026,
+    )
+
+    # Check that each row between │ and │ is exactly 48 characters
+    lines = timeline.strip().split("\n")
+    data_lines = [l for l in lines if "│" in l]
+    assert len(data_lines) == 4
+    for line in data_lines:
+        content = line.split("│")[1]
+        assert len(content) == 48, f"Line '{line}' has {len(content)} chars inside ruler!"
+
+
+def test_svg_and_table_generation(warsaw_calculator: SolarCalculator):
+    table = warsaw_calculator.get_exact_timing_markdown_table(
+        target_hours=14.0,
+        mode="both",
+        morning_split_pct=50.0,
+        overlap_hours=1.0,
+        earliest_start=time(7, 0),
+        latest_end=time(22, 0),
+        year=2026,
+    )
+    assert "| Winter Solstice" in table
+    assert "shifted" in table
+    assert "14h 00m" in table
+
+    svg_b64 = warsaw_calculator.generate_svg_timeline_b64(
+        target_hours=14.0,
+        mode="both",
+        morning_split_pct=50.0,
+        overlap_hours=1.0,
+        earliest_start=time(7, 0),
+        latest_end=time(22, 0),
+        year=2026,
+    )
+    assert svg_b64.startswith("![Seasonal Schedule Timeline](data:image/svg+xml;base64,")
+
+    preview = warsaw_calculator.get_seasonal_preview_text(
+        target_hours=14.0,
+        mode="both",
+        morning_split_pct=50.0,
+        overlap_hours=1.0,
+        earliest_start="07:00:00",
+        latest_end="22:00:00",
+        ref_year=2026,
+    )
+    assert "Earliest Annual Turn-On" in preview
+    assert "Sleep Protection Active" in preview
+

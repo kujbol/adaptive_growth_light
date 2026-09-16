@@ -55,7 +55,52 @@ async def test_config_flow_user_step_creates_entry(hass: HomeAssistant) -> None:
     )
     assert result2["type"] is FlowResultType.CREATE_ENTRY
     assert result2["title"] == "Kitchen Basil"
-    assert result2["data"] == user_input
+    assert result2["data"][CONF_NAME] == "Kitchen Basil"
+    assert result2["data"][CONF_TARGET_ENTITY] == "switch.kitchen_light"
+    assert result2["data"][CONF_TARGET_PHOTOPERIOD] == 15.0
+    assert result2["data"][CONF_LIGHTING_MODE] == "morning"
+    assert result2["data"][CONF_MORNING_SPLIT] == 50.0
+    assert result2["data"][CONF_DAYLIGHT_OVERLAP] == 1.0
+    assert result2["data"]["earliest_start"] == "06:30:00"
+    assert result2["data"]["latest_end"] == "22:00:00"
+
+
+async def test_config_flow_custom_cutoffs_in_preview(hass: HomeAssistant) -> None:
+    """Test modifying cut-offs and photoperiod during preview step."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    user_input = {
+        CONF_NAME: "Bedroom Ficus",
+        CONF_TARGET_ENTITY: "light.bedroom_grow_light",
+        CONF_TARGET_PHOTOPERIOD: 14.0,
+        CONF_LIGHTING_MODE: "both",
+        CONF_MORNING_SPLIT: 50.0,
+        CONF_DAYLIGHT_OVERLAP: 1.0,
+        "earliest_start": "06:30:00",
+        "latest_end": "22:00:00",
+    }
+    result_preview = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input,
+    )
+    assert result_preview["type"] is FlowResultType.FORM
+    assert result_preview["step_id"] == "preview"
+
+    # User tweaks earliest_start to 07:00:00 in the preview step before confirming!
+    result2 = await hass.config_entries.flow.async_configure(
+        result_preview["flow_id"],
+        {
+            CONF_NAME: "Bedroom Ficus",
+            CONF_TARGET_PHOTOPERIOD: 13.5,
+            "earliest_start": "07:00:00",
+            "latest_end": "21:30:00",
+        },
+    )
+    assert result2["type"] is FlowResultType.CREATE_ENTRY
+    assert result2["data"]["earliest_start"] == "07:00:00"
+    assert result2["data"]["latest_end"] == "21:30:00"
+    assert result2["data"][CONF_TARGET_PHOTOPERIOD] == 13.5
 
 
 async def test_options_flow(hass: HomeAssistant) -> None:

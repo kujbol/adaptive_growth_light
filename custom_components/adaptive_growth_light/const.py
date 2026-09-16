@@ -9,6 +9,8 @@ CONF_TARGET_PHOTOPERIOD = "target_photoperiod"
 CONF_LIGHTING_MODE = "lighting_mode"
 CONF_MORNING_SPLIT = "morning_split"
 CONF_DAYLIGHT_OVERLAP = "daylight_overlap"
+CONF_EARLIEST_START = "earliest_start"
+CONF_LATEST_END = "latest_end"
 
 # Lighting modes
 MODE_MORNING = "morning"
@@ -22,6 +24,8 @@ DEFAULT_TARGET_PHOTOPERIOD = 14.0  # hours
 DEFAULT_LIGHTING_MODE = MODE_BOTH
 DEFAULT_MORNING_SPLIT = 50.0  # percentage in morning
 DEFAULT_DAYLIGHT_OVERLAP = 1.0  # hours overlap with daylight
+DEFAULT_EARLIEST_START = "06:30:00"  # earliest allowed morning turn-on
+DEFAULT_LATEST_END = "22:00:00"  # latest allowed evening turn-off
 DEFAULT_ENABLED = True
 
 # Control boundaries
