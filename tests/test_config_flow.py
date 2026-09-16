@@ -359,3 +359,48 @@ async def test_config_flow_auto_name_entity_ending_with_light(
     )
     assert result_create["type"] is FlowResultType.CREATE_ENTRY
     assert result_create["title"] == "Kitchen Grow Adaptive Light"
+
+
+async def test_config_flow_mode_switch_from_morning_to_both_shows_split_slider(
+    hass: HomeAssistant,
+) -> None:
+    """Test that switching from morning mode back to both mode always shows the split slider."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    # 1. User initially picks Morning
+    res_morn = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_NAME: "Ficus",
+            CONF_TARGET_ENTITY: "switch.ficus",
+            CONF_TARGET_PHOTOPERIOD: 14.0,
+            CONF_LIGHTING_MODE: MODE_MORNING,
+            CONF_DAYLIGHT_OVERLAP: 1.0,
+        },
+    )
+    assert res_morn["type"] is FlowResultType.MENU
+    assert res_morn["step_id"] == "preview"
+
+    # 2. User clicks back to change mode to Both
+    res_back = await hass.config_entries.flow.async_configure(
+        res_morn["flow_id"],
+        {"next_step_id": "back"},
+    )
+    assert res_back["type"] is FlowResultType.FORM
+    assert res_back["step_id"] == "user"
+
+    # 3. User switches to Both
+    res_both = await hass.config_entries.flow.async_configure(
+        res_back["flow_id"],
+        {
+            CONF_NAME: "Ficus",
+            CONF_TARGET_ENTITY: "switch.ficus",
+            CONF_TARGET_PHOTOPERIOD: 14.0,
+            CONF_LIGHTING_MODE: MODE_BOTH,
+            CONF_DAYLIGHT_OVERLAP: 1.0,
+        },
+    )
+    # Must show the split slider!
+    assert res_both["type"] is FlowResultType.FORM
+    assert res_both["step_id"] == "split"

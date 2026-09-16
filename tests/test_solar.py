@@ -364,5 +364,61 @@ def test_annual_earliest_turn_on_and_preview_no_cutoffs(warsaw_calculator: Solar
     )
     assert "Sleep Protection Active" not in preview
     assert "held back by morning cut-off" not in preview
+    # Verify ASCII timeline and Markdown table are removed from preview
+    assert "```text" not in preview
+    assert "| Benchmark |" not in preview
+
+
+def test_equinoxes_symmetrical_daylight(warsaw_calculator: SolarCalculator):
+    """Verify that Spring Equinox and Autumn Equinox have virtually identical daylight duration."""
+    spring = warsaw_calculator.get_daily_photoperiod(date(2026, 3, 20), 14.0)
+    autumn = warsaw_calculator.get_daily_photoperiod(date(2026, 9, 22), 14.0)
+
+    assert abs(spring.natural_daylight_hours - autumn.natural_daylight_hours) < 0.1
+    # Both are around 12.2 hours
+    assert 12.0 < spring.natural_daylight_hours < 12.5
+    assert 12.0 < autumn.natural_daylight_hours < 12.5
+
+
+def test_short_supplementary_starts_before_sunrise(warsaw_calculator: SolarCalculator):
+    """Verify that even when supplementary hours are small, morning session always starts before sunrise."""
+    # On April 15, daylight is ~13.9 hours. Target is 14.0 hours (only ~6 minutes supplementary light).
+    plan = warsaw_calculator.get_daily_photoperiod(
+        date(2026, 4, 15),
+        target_hours=14.0,
+        mode="morning",
+        overlap_hours=1.0,
+    )
+    assert plan.morning_session is not None
+    assert plan.sunrise is not None
+    # Morning session must start BEFORE sunrise in morning darkness, not after sunrise
+    assert plan.morning_session.start < plan.sunrise
+    assert plan.morning_session.end > plan.sunrise
+
+
+def test_svg_renders_embedded_benchmark_data(warsaw_calculator: SolarCalculator):
+    """Verify SVG contains embedded benchmark labels, stats, timings, and legend."""
+    import base64
+
+    svg_b64 = warsaw_calculator.generate_svg_timeline_b64(
+        target_hours=14.0,
+        mode="both",
+        morning_split_pct=50.0,
+        overlap_hours=1.0,
+        year=2026,
+    )
+    b64_content = svg_b64.split("base64,")[1].rstrip(")")
+    svg_xml = base64.b64decode(b64_content).decode("utf-8")
+
+    assert "Spring Equinox" in svg_xml
+    assert "Autumn Equinox" in svg_xml
+    assert "Winter Solstice" in svg_xml
+    assert "Summer Solstice" in svg_xml
+    assert "Daylight:" in svg_xml
+    assert "Grow Light:" in svg_xml
+    assert "Total:" in svg_xml
+    assert "Natural Daylight" in svg_xml
+    assert "Active Grow Light" in svg_xml
+
 
 

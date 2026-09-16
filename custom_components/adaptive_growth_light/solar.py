@@ -208,8 +208,15 @@ class SolarCalculator:
 
         if sunrise and morn_seconds > 0:
             # Morning routine: ends at sunrise + overlap
-            m_end = sunrise + overlap_td
-            m_start = m_end - timedelta(seconds=morn_seconds)
+            # If overlap exceeds session duration, scale it to half the duration so it always starts in pre-sunrise darkness
+            morn_td = timedelta(seconds=morn_seconds)
+            eff_overlap_morn = (
+                timedelta(seconds=morn_seconds / 2.0)
+                if overlap_td >= morn_td
+                else overlap_td
+            )
+            m_end = sunrise + eff_overlap_morn
+            m_start = m_end - morn_td
             unclamped_morning = SessionWindow(start=m_start, end=m_end)
 
             # Apply morning cut-off if configured
@@ -239,8 +246,15 @@ class SolarCalculator:
 
         if sunset and eve_seconds > 0:
             # Evening routine: starts at sunset - overlap
-            e_start = sunset - overlap_td
-            e_end = e_start + timedelta(seconds=eve_seconds)
+            # If overlap exceeds session duration, scale it to half the duration so it always extends into post-sunset darkness
+            eve_td = timedelta(seconds=eve_seconds)
+            eff_overlap_eve = (
+                timedelta(seconds=eve_seconds / 2.0)
+                if overlap_td >= eve_td
+                else overlap_td
+            )
+            e_start = sunset - eff_overlap_eve
+            e_end = e_start + eve_td
             unclamped_evening = SessionWindow(start=e_start, end=e_end)
 
             # Apply evening cut-off if configured
@@ -366,9 +380,9 @@ class SolarCalculator:
 
         benchmarks = [
             ("Winter Solstice", date(year, 12, 21)),
-            ("Spring Midpoint", date(year, 4, 15)),
+            ("Spring Equinox", date(year, 3, 20)),
             ("Summer Solstice", date(year, 6, 21)),
-            ("Autumn Midpoint", date(year, 10, 15)),
+            ("Autumn Equinox", date(year, 9, 22)),
         ]
 
         header = "                00:00 03:00 06:00 09:00 12:00 15:00 18:00 21:00 24:00"
@@ -451,41 +465,51 @@ class SolarCalculator:
         latest_end: time | str | None = None,
         year: int | None = None,
     ) -> str:
-        """Generate a responsive vector SVG 24h timeline base64 encoded for Markdown embedding."""
+        """Generate a rich, responsive vector SVG seasonal timeline with embedded benchmark statistics."""
         if year is None:
             year = datetime.now(self.tz).year
 
         benchmarks = [
-            ("Winter Solstice", date(year, 12, 21)),
-            ("Spring Midpoint", date(year, 4, 15)),
-            ("Summer Solstice", date(year, 6, 21)),
-            ("Autumn Midpoint", date(year, 10, 15)),
+            ("Winter Solstice", date(year, 12, 21), "Dec 21"),
+            ("Spring Equinox", date(year, 3, 20), "Mar 20"),
+            ("Summer Solstice", date(year, 6, 21), "Jun 21"),
+            ("Autumn Equinox", date(year, 9, 22), "Sep 22"),
         ]
 
-        W = 840
-        H = 210
-        left = 135
+        def fmt_dur(td: timedelta) -> str:
+            secs = max(0, int(td.total_seconds()))
+            h = secs // 3600
+            m = (secs % 3600) // 60
+            return f"{h}h {m:02d}m"
+
+        def fmt_time_span(s: SessionWindow | None) -> str:
+            if not s:
+                return "Off"
+            st = s.start.strftime("%H:%M")
+            en = s.end.strftime("%H:%M")
+            return f"{st} – {en} ({fmt_dur(s.duration)})"
+
+        W = 860
+        H = 360
+        left = 40
         right = 820
         t_width = right - left
 
         svg = [
-            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="100%" height="auto" style="background:#0f172a;border-radius:10px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">',
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="100%" height="auto" style="background:#0f172a;border-radius:12px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">',
             '<defs>',
             '  <pattern id="cutHatch" width="8" height="8" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">',
-            '    <line x1="0" y1="0" x2="0" y2="8" stroke="#ef4444" stroke-width="2.5" opacity="0.8" />',
+            '    <line x1="0" y1="0" x2="0" y2="8" stroke="#ef4444" stroke-width="2.5" opacity="0.85" />',
             '  </pattern>',
             '</defs>',
         ]
 
-        # Grid lines & ticks
+        # Top 24h Ruler and vertical grid lines
         for h in range(0, 25, 3):
             x = left + (h / 24.0) * t_width
-            svg.append(f'<line x1="{x:.1f}" y1="26" x2="{x:.1f}" y2="{H-20}" stroke="#334155" stroke-width="1" stroke-dasharray="3,3" />')
-            svg.append(f'<text x="{x:.1f}" y="19" fill="#64748b" font-size="11" text-anchor="middle">{h:02d}:00</text>')
-
-        row_h = 24
-        row_gap = 14
-        start_y = 30
+            svg.append(f'<line x1="{x:.1f}" y1="26" x2="{x:.1f}" y2="{H-40}" stroke="#1e293b" stroke-width="1" stroke-dasharray="3,3" />')
+            anchor = "start" if h == 0 else ("end" if h == 24 else "middle")
+            svg.append(f'<text x="{x:.1f}" y="19" fill="#94a3b8" font-size="11" font-weight="500" text-anchor="{anchor}">{h:02d}:00</text>')
 
         parsed_cs = parse_time_helper(earliest_start)
         parsed_ce = parse_time_helper(latest_end)
@@ -494,13 +518,21 @@ class SolarCalculator:
 
         if cs_h is not None:
             cx = left + (cs_h / 24.0) * t_width
-            svg.append(f'<line x1="{cx:.1f}" y1="26" x2="{cx:.1f}" y2="{H-20}" stroke="#ef4444" stroke-width="2" stroke-dasharray="4,2" opacity="0.9" />')
+            svg.append(f'<line x1="{cx:.1f}" y1="26" x2="{cx:.1f}" y2="{H-40}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.8" />')
         if ce_h is not None:
             cx = left + (ce_h / 24.0) * t_width
-            svg.append(f'<line x1="{cx:.1f}" y1="26" x2="{cx:.1f}" y2="{H-20}" stroke="#ef4444" stroke-width="2" stroke-dasharray="4,2" opacity="0.9" />')
+            svg.append(f'<line x1="{cx:.1f}" y1="26" x2="{cx:.1f}" y2="{H-40}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.8" />')
 
-        for idx, (label, d) in enumerate(benchmarks):
-            y = start_y + idx * (row_h + row_gap)
+        start_y = 36
+        block_h = 70
+        bar_h = 16
+
+        for idx, (label, d, date_str) in enumerate(benchmarks):
+            y_base = start_y + idx * block_h
+            y_title = y_base + 14
+            y_bar = y_base + 22
+            y_sub = y_base + 51
+
             plan = self.get_daily_photoperiod(
                 d,
                 target_hours=target_hours,
@@ -511,51 +543,102 @@ class SolarCalculator:
                 latest_end=latest_end,
             )
 
-            svg.append(f'<text x="12" y="{y + 16}" fill="#cbd5e1" font-size="12" font-weight="600">{label}</text>')
-            svg.append(f'<rect x="{left}" y="{y}" width="{t_width}" height="{row_h}" rx="4" fill="#1e293b" />')
+            # Benchmark stats calculation
+            if plan.sunrise and plan.sunset:
+                sun_dur_str = fmt_dur(plan.sunset - plan.sunrise)
+                sun_txt = f"{plan.sunrise.strftime('%H:%M')} – {plan.sunset.strftime('%H:%M')}"
+            else:
+                sun_dur_str = f"{plan.natural_daylight_hours:.1f}h"
+                sun_txt = "Polar Day / Night"
 
-            # Sunlight
+            morn_dur_td = plan.morning_session.duration if plan.morning_session else timedelta(0)
+            eve_dur_td = plan.evening_session.duration if plan.evening_session else timedelta(0)
+            tot_grow_td = morn_dur_td + eve_dur_td
+
+            grow_dur_str = fmt_dur(tot_grow_td) if tot_grow_td.total_seconds() > 0 else "Off"
+            tot_hrs_str = f"{plan.actual_photoperiod_hours:.1f}h"
+
+            morn_txt = fmt_time_span(plan.morning_session)
+            if not plan.morning_session:
+                if plan.unclamped_morning_session:
+                    morn_txt = "Off (Held back by cut-off)"
+                elif plan.supplementary_hours <= 0:
+                    morn_txt = "Off (Sunlight exceeds target)"
+                else:
+                    morn_txt = "Off"
+
+            eve_txt = fmt_time_span(plan.evening_session)
+            if not plan.evening_session:
+                if plan.unclamped_evening_session:
+                    eve_txt = "Off (Held back by cut-off)"
+                elif plan.supplementary_hours <= 0:
+                    eve_txt = "Off (Sunlight exceeds target)"
+                else:
+                    eve_txt = "Off"
+
+            # Top Line: Benchmark Name & High-level Statistics
+            svg.append(f'<text x="{left}" y="{y_title}" fill="#f8fafc" font-size="13" font-weight="700">{label} <tspan fill="#94a3b8" font-size="11" font-weight="400">({date_str})</tspan></text>')
+            svg.append(f'<text x="{right}" y="{y_title}" text-anchor="end" font-size="11" fill="#94a3b8">Daylight: <tspan fill="#f59e0b" font-weight="600">{sun_dur_str}</tspan>  •  Grow Light: <tspan fill="#10b981" font-weight="600">{grow_dur_str}</tspan>  •  Total: <tspan fill="#38bdf8" font-weight="700">{tot_hrs_str}</tspan></text>')
+
+            # Background Timeline Bar
+            svg.append(f'<rect x="{left}" y="{y_bar}" width="{t_width}" height="{bar_h}" rx="4" fill="#1e293b" />')
+
+            # Natural Sunlight segment
             if plan.sunrise and plan.sunset:
                 sr_h = plan.sunrise.hour + plan.sunrise.minute / 60.0
                 ss_h = plan.sunset.hour + plan.sunset.minute / 60.0
                 x1 = left + (sr_h / 24.0) * t_width
                 x2 = left + (ss_h / 24.0) * t_width
-                svg.append(f'<rect x="{x1:.1f}" y="{y}" width="{max(0.0, x2-x1):.1f}" height="{row_h}" fill="#f59e0b" opacity="0.95" rx="2" />')
+                svg.append(f'<rect x="{x1:.1f}" y="{y_bar}" width="{max(0.0, x2-x1):.1f}" height="{bar_h}" fill="#f59e0b" opacity="0.95" rx="2" />')
 
-            # Morning Light & Cut-Off Suppressed
+            # Morning Light & Cut-Off Suppressed segment
             if plan.unclamped_morning_session:
                 u_st = plan.unclamped_morning_session.start.hour + plan.unclamped_morning_session.start.minute / 60.0
                 u_en = plan.unclamped_morning_session.end.hour + plan.unclamped_morning_session.end.minute / 60.0
                 if cs_h is not None and u_st < cs_h:
                     x1 = left + (u_st / 24.0) * t_width
                     x2 = left + (min(cs_h, u_en) / 24.0) * t_width
-                    svg.append(f'<rect x="{x1:.1f}" y="{y}" width="{max(0.0, x2-x1):.1f}" height="{row_h}" fill="url(#cutHatch)" rx="2" />')
+                    svg.append(f'<rect x="{x1:.1f}" y="{y_bar}" width="{max(0.0, x2-x1):.1f}" height="{bar_h}" fill="url(#cutHatch)" rx="2" />')
                 if plan.morning_session:
                     m_st = plan.morning_session.start.hour + plan.morning_session.start.minute / 60.0
                     m_en = plan.morning_session.end.hour + plan.morning_session.end.minute / 60.0
                     x1 = left + (m_st / 24.0) * t_width
                     x2 = left + (m_en / 24.0) * t_width
-                    svg.append(f'<rect x="{x1:.1f}" y="{y}" width="{max(0.0, x2-x1):.1f}" height="{row_h}" fill="#10b981" rx="2" />')
+                    svg.append(f'<rect x="{x1:.1f}" y="{y_bar}" width="{max(0.0, x2-x1):.1f}" height="{bar_h}" fill="#10b981" rx="2" />')
             elif plan.morning_session:
                 m_st = plan.morning_session.start.hour + plan.morning_session.start.minute / 60.0
                 m_en = plan.morning_session.end.hour + plan.morning_session.end.minute / 60.0
                 x1 = left + (m_st / 24.0) * t_width
                 x2 = left + (m_en / 24.0) * t_width
-                svg.append(f'<rect x="{x1:.1f}" y="{y}" width="{max(0.0, x2-x1):.1f}" height="{row_h}" fill="#10b981" rx="2" />')
+                svg.append(f'<rect x="{x1:.1f}" y="{y_bar}" width="{max(0.0, x2-x1):.1f}" height="{bar_h}" fill="#10b981" rx="2" />')
 
-            # Evening Light
+            # Evening Light segment
             if plan.evening_session:
                 e_st = plan.evening_session.start.hour + plan.evening_session.start.minute / 60.0
                 e_en = plan.evening_session.end.hour + plan.evening_session.end.minute / 60.0
                 x1 = left + (e_st / 24.0) * t_width
                 x2 = left + (e_en / 24.0) * t_width
-                svg.append(f'<rect x="{x1:.1f}" y="{y}" width="{max(0.0, x2-x1):.1f}" height="{row_h}" fill="#10b981" rx="2" />')
+                svg.append(f'<rect x="{x1:.1f}" y="{y_bar}" width="{max(0.0, x2-x1):.1f}" height="{bar_h}" fill="#10b981" rx="2" />')
             if plan.unclamped_evening_session and ce_h is not None:
                 u_en = plan.unclamped_evening_session.end.hour + plan.unclamped_evening_session.end.minute / 60.0
                 if u_en > ce_h:
                     x1 = left + (max(ce_h, plan.unclamped_evening_session.start.hour + plan.unclamped_evening_session.start.minute / 60.0) / 24.0) * t_width
                     x2 = left + (u_en / 24.0) * t_width
-                    svg.append(f'<rect x="{x1:.1f}" y="{y}" width="{max(0.0, x2-x1):.1f}" height="{row_h}" fill="url(#cutHatch)" rx="2" />')
+                    svg.append(f'<rect x="{x1:.1f}" y="{y_bar}" width="{max(0.0, x2-x1):.1f}" height="{bar_h}" fill="url(#cutHatch)" rx="2" />')
+
+            # Bottom Line: Detailed Timing Sub-labels
+            svg.append(f'<text x="{left}" y="{y_sub}" fill="#64748b" font-size="10.5">Morning: <tspan fill="#cbd5e1">{morn_txt}</tspan>    •    Sunlight: <tspan fill="#cbd5e1">{sun_txt}</tspan>    •    Evening: <tspan fill="#cbd5e1">{eve_txt}</tspan></text>')
+
+        # Footer Legend
+        leg_y = H - 16
+        svg.append(f'<rect x="{left}" y="{leg_y - 9}" width="12" height="12" rx="2" fill="#f59e0b" />')
+        svg.append(f'<text x="{left + 18}" y="{leg_y + 1}" fill="#cbd5e1" font-size="11">Natural Daylight</text>')
+
+        svg.append(f'<rect x="{left + 150}" y="{leg_y - 9}" width="12" height="12" rx="2" fill="#10b981" />')
+        svg.append(f'<text x="{left + 168}" y="{leg_y + 1}" fill="#cbd5e1" font-size="11">Active Grow Light</text>')
+
+        svg.append(f'<rect x="{left + 310}" y="{leg_y - 9}" width="12" height="12" rx="2" fill="url(#cutHatch)" />')
+        svg.append(f'<text x="{left + 328}" y="{leg_y + 1}" fill="#cbd5e1" font-size="11">Suppressed by Sleep Cut-Off</text>')
 
         svg.append('</svg>')
         svg_str = "".join(svg)
@@ -578,9 +661,9 @@ class SolarCalculator:
 
         benchmarks = [
             ("Winter Solstice (Dec 21)", date(year, 12, 21)),
-            ("Spring Midpoint (Apr 15)", date(year, 4, 15)),
+            ("Spring Equinox (Mar 20)", date(year, 3, 20)),
             ("Summer Solstice (Jun 21)", date(year, 6, 21)),
-            ("Autumn Midpoint (Oct 15)", date(year, 10, 15)),
+            ("Autumn Equinox (Sep 22)", date(year, 9, 22)),
         ]
 
         rows = [
@@ -673,26 +756,6 @@ class SolarCalculator:
             year=year,
         )
 
-        text_ruler = self.get_precision_ascii_timeline(
-            target_hours=target_hours,
-            mode=mode,
-            morning_split_pct=morning_split_pct,
-            overlap_hours=overlap_hours,
-            earliest_start=earliest_start,
-            latest_end=latest_end,
-            year=year,
-        )
-
-        exact_table = self.get_exact_timing_markdown_table(
-            target_hours=target_hours,
-            mode=mode,
-            morning_split_pct=morning_split_pct,
-            overlap_hours=overlap_hours,
-            earliest_start=earliest_start,
-            latest_end=latest_end,
-            year=year,
-        )
-
         banner = []
         if earliest_info["is_clamped"]:
             banner.append(
@@ -708,8 +771,6 @@ class SolarCalculator:
         return "\n\n".join([
             "\n".join(banner),
             svg_chart,
-            "```text\n" + text_ruler + "\n```",
-            exact_table,
         ])
 
     def get_current_status(

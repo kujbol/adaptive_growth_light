@@ -240,9 +240,7 @@ class AdaptiveGrowthLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._config_data[CONF_MORNING_SPLIT] = 0.0
                 return await self.async_step_preview()
             else:  # MODE_BOTH
-                if CONF_MORNING_SPLIT not in self._config_data:
-                    return await self.async_step_split()
-                return await self.async_step_preview()
+                return await self.async_step_split()
 
         return self.async_show_form(
             step_id="user",
@@ -257,11 +255,15 @@ class AdaptiveGrowthLightConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._config_data.update(user_input)
             return await self.async_step_preview()
 
+        split_val = self._config_data.get(CONF_MORNING_SPLIT, DEFAULT_MORNING_SPLIT)
+        if split_val in (0.0, 100.0):
+            split_val = DEFAULT_MORNING_SPLIT
+
         split_schema = vol.Schema(
             {
                 vol.Required(
                     CONF_MORNING_SPLIT,
-                    default=float(self._config_data.get(CONF_MORNING_SPLIT, DEFAULT_MORNING_SPLIT)),
+                    default=float(split_val),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=MIN_SPLIT,
@@ -368,15 +370,12 @@ class AdaptiveGrowthLightOptionsFlowHandler(config_entries.OptionsFlow):
                 self._options_data[CONF_MORNING_SPLIT] = 0.0
                 return await self.async_step_preview()
             else:  # MODE_BOTH
-                if CONF_MORNING_SPLIT not in user_input:
-                    return await self.async_step_split()
-                return await self.async_step_preview()
+                return await self.async_step_split()
 
         current_data = {**self.config_entry.data, **self.config_entry.options, **self._options_data}
-        show_split = current_data.get(CONF_LIGHTING_MODE, DEFAULT_LIGHTING_MODE) == MODE_BOTH
         return self.async_show_form(
             step_id="init",
-            data_schema=get_config_schema(current_data, include_split=show_split),
+            data_schema=get_config_schema(current_data, include_split=False),
         )
 
     async def async_step_split(
@@ -391,6 +390,9 @@ class AdaptiveGrowthLightOptionsFlowHandler(config_entries.OptionsFlow):
             CONF_MORNING_SPLIT,
             self.config_entry.data.get(CONF_MORNING_SPLIT, DEFAULT_MORNING_SPLIT),
         )
+        if current_split in (0.0, 100.0):
+            current_split = DEFAULT_MORNING_SPLIT
+
         split_schema = vol.Schema(
             {
                 vol.Required(
@@ -460,10 +462,9 @@ class AdaptiveGrowthLightOptionsFlowHandler(config_entries.OptionsFlow):
     ) -> config_entries.ConfigFlowResult:
         """Navigate back to init step."""
         current_data = {**self.config_entry.data, **self.config_entry.options, **self._options_data}
-        show_split = current_data.get(CONF_LIGHTING_MODE, DEFAULT_LIGHTING_MODE) == MODE_BOTH
         return self.async_show_form(
             step_id="init",
-            data_schema=get_config_schema(current_data, include_split=show_split),
+            data_schema=get_config_schema(current_data, include_split=False),
         )
 
 
